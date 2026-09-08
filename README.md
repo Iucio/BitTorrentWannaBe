@@ -38,7 +38,7 @@ BitTorrentWannaBe/
 │   └── visao/
 ├── README.md
 ├── LICENSE
-└── .gitignore
+└── .gitignore ```
 
 Tecnologias previstas
 Python
