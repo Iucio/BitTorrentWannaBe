@@ -38,31 +38,34 @@ BitTorrentWannaBe/
 │   └── visao/
 ├── README.md
 ├── LICENSE
-└── .gitignore ```
+└── .gitignore
+```
 
-Tecnologias previstas
-Python
-TCP Sockets
-HTTP
-Bencode
-SHA-1
-Biblioteca struct
-Documentação
+## Tecnologias previstas
+- Python
+- TCP Sockets
+- HTTP
+- Bencode
+- SHA-1
+- Biblioteca `struct`
+
+## Documentação
 
 Os artefatos produzidos ao longo da disciplina são mantidos na pasta documentos/, incluindo:
 
-Documento de Visão
-Plano de Projeto
-EAP
-Cronograma
-Análise de riscos
-Monitoramento e controle
-Slides das rodadas
-Documentação de gerência de configuração
-Disciplina
+- Documento de Visão
+- Plano de Projeto
+- EAP
+- Cronograma
+- Análise de riscos
+- Monitoramento e controle
+- Slides das rodadas
+- Documentação de gerência de configuração
 
-Projeto desenvolvido para a disciplina GPMS — Gerência de Projeto e Manutenção de Software.
+## Disciplina
 
-Licença
+ Projeto desenvolvido para a disciplina GPMS — Gerência de Projeto e Manutenção de Software.
+
+## Licença
 
 Este projeto está licenciado sob a licença MIT.
