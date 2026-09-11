@@ -2,71 +2,113 @@
 
 ## Estratégia de Branches
 
-O projeto utilizará uma estratégia de branches para organizar o desenvolvimento
-e evitar alterações diretas na versão principal.
+O projeto utiliza Git e GitHub para controle de versões e adota uma estratégia
+de branches para separar o desenvolvimento da versão estável do sistema.
 
-### Branch main
+Durante a etapa inicial do projeto foram utilizadas principalmente as branches
+`main` e `develop`. A partir da Rodada 2, o fluxo passa a incluir branches
+específicas para o desenvolvimento de funcionalidades.
 
-A branch `main` representa a versão principal e estável do projeto.
+### Branch `main`
 
-Não devem ser realizadas alterações diretamente na branch `main`.
+A branch `main` representa a versão estável e entregável do projeto.
 
-### Branch develop
+Alterações de desenvolvimento não devem ser realizadas diretamente nessa branch.
+A integração de mudanças ocorre por meio de Pull Requests.
 
-A branch `develop` será utilizada para o desenvolvimento e integração das
-funcionalidades do projeto.
+### Branch `develop`
 
-As alterações realizadas nas branches de funcionalidades serão integradas
-primeiramente na `develop`.
+A branch `develop` é utilizada para integração das funcionalidades em
+desenvolvimento.
+
+As alterações concluídas nas branches de funcionalidades são integradas
+primeiramente à `develop`.
 
 ### Branches de funcionalidades
 
-Cada tarefa ou funcionalidade deverá ser desenvolvida em uma branch própria,
-criada a partir da branch `develop`.
+A partir da Rodada 2, novas funcionalidades e tarefas de desenvolvimento devem,
+sempre que possível, ser realizadas em branches próprias criadas a partir da
+`develop`.
 
-O padrão de nomenclatura será:
+O padrão de nomenclatura adotado é:
 
 `feature/nome-da-tarefa`
 
 Exemplos:
 
 - `feature/criar-tracker`
-- `feature/criar-cliente-p2p`
-- `feature/comunicacao`
-- `feature/testes`
+- `feature/cliente-p2p`
+- `feature/handshake`
+- `feature/verificacao-integridade`
 
-Após a conclusão da tarefa, a branch `feature` deverá ser integrada à branch
-`develop`.
+Após a conclusão da tarefa, a branch de funcionalidade é integrada à `develop`
+por meio de Pull Request.
 
 ### Fluxo de desenvolvimento
 
-O fluxo definido para o projeto será:
+O fluxo adotado é:
 
 `feature/* → develop → main`
 
-A branch `main` receberá somente versões consideradas estáveis do projeto.
+A `develop` concentra o desenvolvimento em andamento, enquanto a `main` recebe
+apenas versões consideradas estáveis e adequadas para entrega ou demonstração.
+
+## Pull Requests
+
+Os Pull Requests são utilizados para registrar e revisar a integração de mudanças
+entre branches.
+
+O fluxo esperado é:
+
+1. desenvolvimento da tarefa em uma branch `feature/*`;
+2. Pull Request da branch de funcionalidade para `develop`;
+3. integração e validação das alterações;
+4. Pull Request de `develop` para `main` quando uma versão estiver pronta para
+   entrega ou demonstração.
 
 ## Commits
 
-Os commits deverão possuir mensagens objetivas, descrevendo a alteração
-realizada.
+Os commits devem possuir mensagens objetivas que descrevam a alteração realizada.
 
-Exemplo:
+Exemplos:
 
-`Adiciona estrutura inicial da documentação`
+- `Adiciona estrutura inicial da documentação`
+- `Implementa parser Bencode`
+- `Corrige validação dos fragmentos`
+
+## Controle de modificações
+
+As tarefas e alterações do projeto são registradas por meio de GitHub Issues.
+
+As Issues podem ser associadas a:
+
+- responsável;
+- milestone;
+- labels;
+- funcionalidade correspondente.
+
+Esse mecanismo permite acompanhar o estado das atividades e manter o histórico
+das modificações realizadas durante o projeto.
+
+## Milestones
+
+Os milestones são utilizados para agrupar Issues relacionadas às principais
+etapas do projeto:
+
+- `Planejamento e Documentação`;
+- `Desenvolvimento do Sistema`;
+- `Testes e Entrega`.
 
 ## Organização da documentação
 
-A documentação do projeto será mantida dentro da pasta `documentos/`,
-organizada por categorias.
+A documentação do projeto é mantida dentro da pasta `documentos/`, organizada
+por categorias:
 
-Estrutura prevista:
-
-- `configuracao/` — documentos relacionados à configuração e gerenciamento do projeto;
+- `configuracao/` — gerência de configuração e versionamento;
 - `cronograma/` — cronograma e planejamento temporal;
 - `eap/` — Estrutura Analítica do Projeto;
-- `monitoramento/` — acompanhamento do projeto;
-- `planejamento/` — documentos de planejamento;
+- `monitoramento/` — Burndown, EVM e acompanhamento;
+- `planejamento/` — documentos gerais de planejamento;
 - `riscos/` — identificação e gerenciamento de riscos;
-- `slides/` — apresentações;
-- `visao/` — Documento de Visão e documentos relacionados.
+- `slides/` — apresentações das rodadas;
+- `visao/` — Documento de Visão.
