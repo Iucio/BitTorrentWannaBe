@@ -2,98 +2,72 @@
 
 ## Estratégia de Branches
 
-O projeto utiliza Git e GitHub para controle de versões e adota uma estratégia
-de branches para separar o desenvolvimento da versão estável do sistema.
+O projeto utiliza Git e GitHub para controle de versões.
 
-Durante a etapa inicial do projeto foram utilizadas principalmente as branches
-`main` e `develop`. A partir da Rodada 2, o fluxo passa a incluir branches
-específicas para o desenvolvimento de funcionalidades.
+A estratégia de ramificação adotada utiliza duas branches principais:
+
+- `main`
+- `develop`
 
 ### Branch `main`
 
 A branch `main` representa a versão estável e entregável do projeto.
 
-Alterações de desenvolvimento não devem ser realizadas diretamente nessa branch.
-A integração de mudanças ocorre por meio de Pull Requests.
+Ela deve conter apenas versões consideradas adequadas para apresentação ou entrega.
+
+As alterações não são desenvolvidas diretamente na `main`.
 
 ### Branch `develop`
 
-A branch `develop` é utilizada para integração das funcionalidades em
-desenvolvimento.
+A branch `develop` é utilizada para o desenvolvimento e integração das alterações realizadas pela equipe.
 
-As alterações concluídas nas branches de funcionalidades são integradas
-primeiramente à `develop`.
+As novas funcionalidades, correções e atualizações de documentação são incorporadas inicialmente na `develop`.
 
-### Branches de funcionalidades
-
-A partir da Rodada 2, novas funcionalidades e tarefas de desenvolvimento devem,
-sempre que possível, ser realizadas em branches próprias criadas a partir da
-`develop`.
-
-O padrão de nomenclatura adotado é:
-
-`feature/nome-da-tarefa`
-
-Exemplos:
-
-- `feature/criar-tracker`
-- `feature/cliente-p2p`
-- `feature/handshake`
-- `feature/verificacao-integridade`
-
-Após a conclusão da tarefa, a branch de funcionalidade é integrada à `develop`
-por meio de Pull Request.
+Quando o conjunto de alterações é considerado estável, é aberto um Pull Request da `develop` para a `main`.
 
 ### Fluxo de desenvolvimento
 
-O fluxo adotado é:
+O fluxo adotado pelo projeto é:
 
-`feature/* → develop → main`
+`develop → main`
 
-A `develop` concentra o desenvolvimento em andamento, enquanto a `main` recebe
-apenas versões consideradas estáveis e adequadas para entrega ou demonstração.
+A `develop` representa o estado atual de desenvolvimento do sistema, enquanto a `main` representa versões estáveis e entregáveis.
 
 ## Pull Requests
 
-Os Pull Requests são utilizados para registrar e revisar a integração de mudanças
-entre branches.
+Os Pull Requests são utilizados para registrar a integração das alterações da branch `develop` para a branch `main`.
 
-O fluxo esperado é:
-
-1. desenvolvimento da tarefa em uma branch `feature/*`;
-2. Pull Request da branch de funcionalidade para `develop`;
-3. integração e validação das alterações;
-4. Pull Request de `develop` para `main` quando uma versão estiver pronta para
-   entrega ou demonstração.
+Antes do merge, as alterações devem ser revisadas para garantir que a versão integrada esteja adequada para entrega ou demonstração.
 
 ## Commits
 
-Os commits devem possuir mensagens objetivas que descrevam a alteração realizada.
+Os commits devem possuir mensagens objetivas, descrevendo a alteração realizada.
 
 Exemplos:
 
 - `Adiciona estrutura inicial da documentação`
 - `Implementa parser Bencode`
-- `Corrige validação dos fragmentos`
+- `Atualiza análise de riscos`
+- `Corrige comunicação com Tracker`
 
-## Controle de modificações
+## Controle de Modificações
 
-As tarefas e alterações do projeto são registradas por meio de GitHub Issues.
+O projeto utiliza GitHub Issues para registrar e acompanhar tarefas, funcionalidades e alterações.
 
-As Issues podem ser associadas a:
+As Issues podem conter:
 
 - responsável;
 - milestone;
 - labels;
-- funcionalidade correspondente.
+- descrição da atividade;
+- critérios de aceite;
+- relacionamento com outras Issues.
 
-Esse mecanismo permite acompanhar o estado das atividades e manter o histórico
-das modificações realizadas durante o projeto.
+As Issues concluídas são marcadas como fechadas, mantendo o histórico das atividades realizadas.
 
 ## Milestones
 
-Os milestones são utilizados para agrupar Issues relacionadas às principais
-etapas do projeto:
+Os milestones são utilizados para agrupar Issues relacionadas às principais etapas do projeto:
 
 - `Planejamento e Documentação`;
 - `Desenvolvimento do Sistema`;
@@ -101,8 +75,7 @@ etapas do projeto:
 
 ## Organização da documentação
 
-A documentação do projeto é mantida dentro da pasta `documentos/`, organizada
-por categorias:
+A documentação do projeto é mantida dentro da pasta `documentos/`, organizada por categorias:
 
 - `configuracao/` — gerência de configuração e versionamento;
 - `cronograma/` — cronograma e planejamento temporal;
