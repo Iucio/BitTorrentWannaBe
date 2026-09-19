@@ -27,6 +27,13 @@ AnnounceResponse Tracker::announce(const AnnounceRequest& req) {
         return resp;
     }
 
+    // só o announce de rotina respeita o min_interval
+    auto existente = repo_.buscar_peer(req.info_hash, req.peer_id);
+    if (existente && req.evento == Evento::Nenhum &&
+        agora - existente->ultimo_announce < config_.min_interval) {
+        return falha("announce antes do min_interval");
+    }
+
     Peer peer;
     peer.peer_id = req.peer_id;
     peer.ip = req.ip;
@@ -40,6 +47,12 @@ AnnounceResponse Tracker::announce(const AnnounceRequest& req) {
     auto peers = repo_.listar_peers(req.info_hash);
     contar(peers, resp);
     resp.peers = escolher_peers(std::move(peers), req.peer_id);
+    return resp;
+}
+
+AnnounceResponse Tracker::falha(std::string motivo) const {
+    AnnounceResponse resp;
+    resp.falha = std::move(motivo);
     return resp;
 }
 

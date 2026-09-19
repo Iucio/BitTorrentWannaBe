@@ -22,6 +22,7 @@ public:
     AnnounceResponse announce(const AnnounceRequest& req);
 
 private:
+    AnnounceResponse falha(std::string motivo) const;
     void contar(const std::vector<Peer>& peers, AnnounceResponse& resp) const;
     std::vector<Peer> escolher_peers(std::vector<Peer> candidatos,
                                      const std::string& peer_id) const;
