@@ -20,6 +20,13 @@ AnnounceResponse Tracker::announce(const AnnounceRequest& req) {
     resp.interval = config_.interval;
     resp.min_interval = config_.min_interval;
 
+    // saindo da rede: remove e devolve só as contagens
+    if (req.evento == Evento::Stopped) {
+        repo_.remover_peer(req.info_hash, req.peer_id);
+        contar(repo_.listar_peers(req.info_hash), resp);
+        return resp;
+    }
+
     Peer peer;
     peer.peer_id = req.peer_id;
     peer.ip = req.ip;
