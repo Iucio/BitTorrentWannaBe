@@ -15,6 +15,7 @@ Tracker::Tracker(Repositorio& repo, Config config, std::function<Segundos()> rel
 
 AnnounceResponse Tracker::announce(const AnnounceRequest& req) {
     const Segundos agora = relogio_();
+    repo_.remover_expirados(agora - config_.interval * config_.fator_expiracao);
 
     AnnounceResponse resp;
     resp.interval = config_.interval;

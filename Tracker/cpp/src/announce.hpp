@@ -10,6 +10,7 @@ namespace tracker {
 struct Config {
     Segundos interval = 1800;    // 30 min
     Segundos min_interval = 900; // 15 min
+    int fator_expiracao = 2;     // sem announce há interval * fator => remove
 };
 
 Segundos relogio_sistema();
