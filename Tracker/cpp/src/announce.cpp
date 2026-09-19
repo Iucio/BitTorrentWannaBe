@@ -11,7 +11,7 @@ Segundos relogio_sistema() {
 }
 
 Tracker::Tracker(Repositorio& repo, Config config, std::function<Segundos()> relogio)
-    : repo_(repo), config_(config), relogio_(std::move(relogio)) {}
+    : repo_(repo), config_(config), relogio_(std::move(relogio)), rng_(std::random_device{}()) {}
 
 AnnounceResponse Tracker::announce(const AnnounceRequest& req) {
     const Segundos agora = relogio_();
@@ -47,7 +47,7 @@ AnnounceResponse Tracker::announce(const AnnounceRequest& req) {
 
     auto peers = repo_.listar_peers(req.info_hash);
     contar(peers, resp);
-    resp.peers = escolher_peers(std::move(peers), req.peer_id);
+    resp.peers = escolher_peers(std::move(peers), req.peer_id, req.numwant);
     return resp;
 }
 
@@ -64,12 +64,17 @@ void Tracker::contar(const std::vector<Peer>& peers, AnnounceResponse& resp) con
     }
 }
 
-std::vector<Peer> Tracker::escolher_peers(std::vector<Peer> candidatos,
-                                          const std::string& peer_id) const {
+std::vector<Peer> Tracker::escolher_peers(std::vector<Peer> candidatos, const std::string& peer_id,
+                                          int numwant) {
     // o próprio cliente não entra na lista
     candidatos.erase(std::remove_if(candidatos.begin(), candidatos.end(),
                                     [&](const Peer& p) { return p.peer_id == peer_id; }),
                      candidatos.end());
+    // embaralha pra não mandar sempre os mesmos peers
+    std::shuffle(candidatos.begin(), candidatos.end(), rng_);
+
+    const auto limite = static_cast<std::size_t>(std::clamp(numwant, 0, config_.numwant_max));
+    if (candidatos.size() > limite) candidatos.resize(limite);
     return candidatos;
 }
 
