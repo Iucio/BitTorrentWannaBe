@@ -129,7 +129,7 @@ def encode_dict(dic:dict):
     return bencode
 
 
-def parser(var): # Função para decidir se vai codificar ou decodificar baseada no tipo do argumento
+def bencode(var): # Função para decidir se vai codificar ou decodificar baseada no tipo do argumento
     if type(var) == dict: # Dicionário para codificar em B-encode
         return encode_dict(var)
     else: # String para decodificar para B-encode
