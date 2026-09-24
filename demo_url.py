@@ -4,7 +4,7 @@ from Tracker.url_decoder import url_decode
 import random
 import string
 
-def gerar_peer_id():
+def gerar_peer_id(): # Apenas para demo
     prefixo = "-UF0001-" # Identificao utilizada no protocolo, mas criei uma, pois é um trabalho de faculdade.
     randon_bytes = "".join(random.choices(string.ascii_letters + string.digits, k=12))
     peer_id = prefixo + randon_bytes

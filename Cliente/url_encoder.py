@@ -1,21 +1,21 @@
-from urllib.parse import urlencode, parse_qs, urlparse
-from .info_hash import hash
-from Tracker.url_decoder import url_decode # import apenas para demonstração
+from urllib.parse import urlencode, quote_from_bytes, parse_qs, urlparse
+from info_hash import infhash
 
-# A única função deste módulo é pegar todas as informações e formar a url, apenas.
+# A única função deste módulo é pegar todas as informações e formar a url
 
-def url_encode(dic, peer_id, porta, uploaded, downloaded, left):
+def url_encode(dic, peer_id, porta, uploaded, downloaded, left, event="started"):
     path = f"{dic["announce"]}?" # Caminho da url
     try:
-        info_hash = hash(dic["info"])
+        info_hash = infhash(dic) # Vem em bytes puro
         params = { # parâmetros da url
-                "info_hash": info_hash,  # Caso seja um dicionario sem info_hash
+                "info_hash": quote_from_bytes(info_hash), # Transformo em percent-encoded. Padrão utilizado em urls.
                 "peer_id": peer_id, 
                 "port": porta,
                 "uploaded": uploaded,
                 "downloaded": downloaded,
                 "left": left,
-                "private": dic["private"]
+                "event": event,
+                "private": dic["private"] 
                 }
     except Exception as e:
         print(e)
