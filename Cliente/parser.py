@@ -134,11 +134,3 @@ def bencode(var): # Função para decidir se vai codificar ou decodificar basead
         return encode_dict(var)
     else: # String para decodificar para B-encode
         return parse_bencode(var)[0][0] # Pela natureza da minha solução, tive que usar índices por causa da lista.
-
-# Exemplo de um B-encode
-#stream = "d8:announce36:https://tracker.example.com/announce4:infod6:lengthi5242880e4:name11:example.txt6:pieces20:abcdefghijabcdefghij12:piece lengthi262144eee"
-#stream2 = "d8:intervali1800e5:peers6:IPPORT8:completei10e10:incompletei5ee"
-# Exemplos de uso:
-#print(f"B-encode => Dicionario: \n{parser(stream)}\n")
-#print(f"Dicionario => B-encode: \n{parser(parser(stream))}\n")
-#print("Stream2: ", parser(stream2))
