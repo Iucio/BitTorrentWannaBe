@@ -103,6 +103,13 @@ std::variant<AnnounceRequest, std::string> ler_announce(const std::string& query
         req.numwant = static_cast<int>(std::min<std::int64_t>(*v, 1000));
     }
 
+    const std::string evento = params.count("event") ? params["event"] : "";
+    if (evento.empty()) req.evento = Evento::Nenhum;
+    else if (evento == "started") req.evento = Evento::Started;
+    else if (evento == "completed") req.evento = Evento::Completed;
+    else if (evento == "stopped") req.evento = Evento::Stopped;
+    else return std::string("event invalido");
+
     req.ip = params.count("ip") && !params["ip"].empty() ? params["ip"] : ip_remetente;
     return req;
 }
