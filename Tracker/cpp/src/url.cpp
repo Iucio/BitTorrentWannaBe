@@ -1,6 +1,7 @@
 #include "url.hpp"
 
 #include <cctype>
+#include <charconv>
 
 namespace tracker {
 
@@ -11,6 +12,14 @@ int hex(char c) {
     c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
     if (c >= 'a' && c <= 'f') return c - 'a' + 10;
     return -1;
+}
+
+// inteiro >= 0 ocupando a string inteira
+std::optional<std::int64_t> ler_int(const std::string& s) {
+    std::int64_t v = 0;
+    auto [fim, erro] = std::from_chars(s.data(), s.data() + s.size(), v);
+    if (erro != std::errc{} || fim != s.data() + s.size() || v < 0) return std::nullopt;
+    return v;
 }
 
 } // namespace
@@ -70,6 +79,14 @@ std::variant<AnnounceRequest, std::string> ler_announce(const std::string& query
 
     req.peer_id = params["peer_id"];
     if (req.peer_id.size() != 20) return std::string("peer_id deve ter 20 bytes");
+
+    auto porta = ler_int(params["port"]);
+    if (!porta || *porta < 1 || *porta > 65535) return std::string("port invalida");
+    req.porta = static_cast<std::uint16_t>(*porta);
+
+    auto left = ler_int(params["left"]);
+    if (!left) return std::string("left invalido");
+    req.left = *left;
 
     req.ip = params.count("ip") && !params["ip"].empty() ? params["ip"] : ip_remetente;
     return req;
