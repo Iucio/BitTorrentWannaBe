@@ -53,4 +53,26 @@ std::optional<std::map<std::string, std::string>> parse_query(const std::string&
     return params;
 }
 
+std::variant<AnnounceRequest, std::string> ler_announce(const std::string& query,
+                                                        const std::string& ip_remetente) {
+    auto params_opt = parse_query(query);
+    if (!params_opt) return std::string("url mal formada");
+    auto& params = *params_opt;
+
+    for (const char* obrigatorio : {"info_hash", "peer_id", "port", "left"}) {
+        if (!params.count(obrigatorio)) return std::string("parametro ausente: ") + obrigatorio;
+    }
+
+    AnnounceRequest req;
+
+    req.info_hash = params["info_hash"];
+    if (req.info_hash.size() != 20) return std::string("info_hash deve ter 20 bytes");
+
+    req.peer_id = params["peer_id"];
+    if (req.peer_id.size() != 20) return std::string("peer_id deve ter 20 bytes");
+
+    req.ip = params.count("ip") && !params["ip"].empty() ? params["ip"] : ip_remetente;
+    return req;
+}
+
 } // namespace tracker
