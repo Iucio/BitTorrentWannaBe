@@ -75,7 +75,12 @@ std::variant<AnnounceRequest, std::string> ler_announce(const std::string& query
 
     AnnounceRequest req;
 
+    // se ainda não tiver 20 bytes, decodifica de novo
     req.info_hash = params["info_hash"];
+    if (req.info_hash.size() != 20) {
+        auto de_novo = percent_decode(req.info_hash);
+        if (de_novo) req.info_hash = *de_novo;
+    }
     if (req.info_hash.size() != 20) return std::string("info_hash deve ter 20 bytes");
 
     req.peer_id = params["peer_id"];
