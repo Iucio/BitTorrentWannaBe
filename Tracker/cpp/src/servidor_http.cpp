@@ -21,9 +21,16 @@ void enviar(int cliente, const RespostaHttp& resp) {
     // TODO
 }
 
+// só o cabecalho (get não tem corpo) no maximo 8 KB
 std::string ler_cabecalho(int cliente) {
-    // TODO
-    return "";
+    std::string dados;
+    char buf[1024];
+    while (dados.find("\r\n\r\n") == std::string::npos && dados.size() < 8192) {
+        auto n = recv(cliente, buf, sizeof buf, 0);
+        if (n <= 0) break;
+        dados.append(buf, static_cast<std::size_t>(n));
+    }
+    return dados;
 }
 
 void atender(int cliente, const std::string& ip, const Handler& handler) {
