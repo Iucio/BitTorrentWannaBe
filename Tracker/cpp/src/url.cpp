@@ -1,5 +1,6 @@
 #include "url.hpp"
 
+#include <algorithm>
 #include <cctype>
 #include <charconv>
 
@@ -87,6 +88,20 @@ std::variant<AnnounceRequest, std::string> ler_announce(const std::string& query
     auto left = ler_int(params["left"]);
     if (!left) return std::string("left invalido");
     req.left = *left;
+
+    for (auto [nome, campo] : {std::pair{"uploaded", &req.uploaded},
+                               std::pair{"downloaded", &req.downloaded}}) {
+        if (!params.count(nome)) continue;
+        auto v = ler_int(params[nome]);
+        if (!v) return std::string(nome) + " invalido";
+        *campo = *v;
+    }
+
+    if (params.count("numwant")) {
+        auto v = ler_int(params["numwant"]);
+        if (!v) return std::string("numwant invalido");
+        req.numwant = static_cast<int>(std::min<std::int64_t>(*v, 1000));
+    }
 
     req.ip = params.count("ip") && !params["ip"].empty() ? params["ip"] : ip_remetente;
     return req;
