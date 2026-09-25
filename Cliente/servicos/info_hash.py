@@ -1,7 +1,7 @@
 # Calcula o info_hash
 
 import hashlib
-from parser import bencode
+from .parser import bencode
 
 def infhash(dic):
     if type(dic) == dict:

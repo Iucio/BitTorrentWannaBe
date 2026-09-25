@@ -1,17 +1,15 @@
-import json as j
-from url_encoder import url_encode
-from info_hash import infhash
+from servicos.info_hash import infhash
 
 class Sessao:
-    def __init__(self, arquivo, peer_id, uploaded=0, downloaded=0, left=0):
+    def __init__(self, arquivo, uploaded=0, downloaded=0, left=0):
         # Dados da sessão
         self.info_hash = infhash(arquivo) # Extrai o info_hash do arquivo
-        self.peer_id = peer_id # Identificador do nó (cliente) na rede, enquanto ele estiver ativo
+        self.tracker = arquivo["announce"] # Endereço do Tracker
         self.uploaded = uploaded # Quantos bytes foram compartilhados na rede pelo nó
         self.downloaded = downloaded # Quantos bytes o nó baixou da rede
         self.left = left # Quantos bytes faltam para baixar do arquivo espeficicado pelo info_hash
-        self.arquivo = arquivo # Dicionário contendo os dados do arquivo
-
+        self.arquivo = arquivo # Dicionário do .Torrent
+        self.private = arquivo["private"] # Define se o arquivo é privado ou não
         # Dados retornados pelo Tracker
         self.interval = 0
         self.min_interval = 0
@@ -27,6 +25,3 @@ class Sessao:
         self.min_interval = dados_tracker["min_interval"]
         self.complete = dados_tracker["complete"]
         self.incomplete = dados_tracker["incomplete"]
-
-    def announce(self):
-        return "Nada ainda"

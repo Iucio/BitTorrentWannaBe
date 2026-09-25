@@ -2,7 +2,7 @@
 
 import hashlib
 from urllib.parse import quote_from_bytes
-from .parser import bencode
+from parser import bencode
 
 def hash(info):
     if type(info) == dict:
