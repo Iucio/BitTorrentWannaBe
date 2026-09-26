@@ -23,12 +23,13 @@ const char* texto_status(int status) {
 }
 
 void enviar(int cliente, const RespostaHttp& resp) {
+    const std::string corpo = resp.corpo + "\n"; // quebra no fim
     std::ostringstream out;
     out << "HTTP/1.1 " << resp.status << " " << texto_status(resp.status) << "\r\n"
         << "Content-Type: " << resp.content_type << "\r\n"
-        << "Content-Length: " << resp.corpo.size() << "\r\n"
+        << "Content-Length: " << corpo.size() << "\r\n"
         << "Connection: close\r\n\r\n"
-        << resp.corpo;
+        << corpo;
     const std::string bytes = out.str();
     std::size_t enviado = 0;
     while (enviado < bytes.size()) {
