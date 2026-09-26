@@ -13,12 +13,29 @@ namespace tracker {
 namespace {
 
 const char* texto_status(int status) {
-    // TODO
-    return "";
+    switch (status) {
+    case 200: return "OK";
+    case 400: return "Bad Request";
+    case 404: return "Not Found";
+    case 405: return "Method Not Allowed";
+    default: return "Internal Server Error";
+    }
 }
 
 void enviar(int cliente, const RespostaHttp& resp) {
-    // TODO
+    std::ostringstream out;
+    out << "HTTP/1.1 " << resp.status << " " << texto_status(resp.status) << "\r\n"
+        << "Content-Type: " << resp.content_type << "\r\n"
+        << "Content-Length: " << resp.corpo.size() << "\r\n"
+        << "Connection: close\r\n\r\n"
+        << resp.corpo;
+    const std::string bytes = out.str();
+    std::size_t enviado = 0;
+    while (enviado < bytes.size()) {
+        auto n = send(cliente, bytes.data() + enviado, bytes.size() - enviado, 0);
+        if (n <= 0) break;
+        enviado += static_cast<std::size_t>(n);
+    }
 }
 
 // só o cabecalho (get não tem corpo) no maximo 8 KB
