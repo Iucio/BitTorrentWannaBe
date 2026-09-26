@@ -1,0 +1,122 @@
+#include "url.hpp"
+
+#include <algorithm>
+#include <cctype>
+#include <charconv>
+
+namespace tracker {
+
+namespace {
+
+int hex(char c) {
+    if (c >= '0' && c <= '9') return c - '0';
+    c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    return -1;
+}
+
+// inteiro >= 0 ocupando a string inteira
+std::optional<std::int64_t> ler_int(const std::string& s) {
+    std::int64_t v = 0;
+    auto [fim, erro] = std::from_chars(s.data(), s.data() + s.size(), v);
+    if (erro != std::errc{} || fim != s.data() + s.size() || v < 0) return std::nullopt;
+    return v;
+}
+
+} // namespace
+
+std::optional<std::string> percent_decode(const std::string& s) {
+    std::string out;
+    out.reserve(s.size());
+    for (std::size_t i = 0; i < s.size(); i++) {
+        if (s[i] == '+') {
+            out += ' ';
+        } else if (s[i] == '%') {
+            if (i + 2 >= s.size()) return std::nullopt;
+            int alto = hex(s[i + 1]), baixo = hex(s[i + 2]);
+            if (alto < 0 || baixo < 0) return std::nullopt;
+            out += static_cast<char>(alto * 16 + baixo);
+            i += 2;
+        } else {
+            out += s[i];
+        }
+    }
+    return out;
+}
+
+std::optional<std::map<std::string, std::string>> parse_query(const std::string& query) {
+    std::map<std::string, std::string> params;
+    std::size_t inicio = 0;
+    while (inicio <= query.size()) {
+        std::size_t fim = query.find('&', inicio);
+        if (fim == std::string::npos) fim = query.size();
+        std::string par = query.substr(inicio, fim - inicio);
+        if (!par.empty()) {
+            std::size_t igual = par.find('=');
+            auto chave = percent_decode(par.substr(0, igual));
+            auto valor = percent_decode(igual == std::string::npos ? "" : par.substr(igual + 1));
+            if (!chave || !valor) return std::nullopt;
+            params[*chave] = *valor;
+        }
+        inicio = fim + 1;
+    }
+    return params;
+}
+
+std::variant<AnnounceRequest, std::string> ler_announce(const std::string& query,
+                                                        const std::string& ip_remetente) {
+    auto params_opt = parse_query(query);
+    if (!params_opt) return std::string("url mal formada");
+    auto& params = *params_opt;
+
+    for (const char* obrigatorio : {"info_hash", "peer_id", "port", "left"}) {
+        if (!params.count(obrigatorio)) return std::string("parametro ausente: ") + obrigatorio;
+    }
+
+    AnnounceRequest req;
+
+    // se ainda não tiver 20 bytes, decodifica de novo
+    req.info_hash = params["info_hash"];
+    if (req.info_hash.size() != 20) {
+        auto de_novo = percent_decode(req.info_hash);
+        if (de_novo) req.info_hash = *de_novo;
+    }
+    if (req.info_hash.size() != 20) return std::string("info_hash deve ter 20 bytes");
+
+    req.peer_id = params["peer_id"];
+    if (req.peer_id.size() != 20) return std::string("peer_id deve ter 20 bytes");
+
+    auto porta = ler_int(params["port"]);
+    if (!porta || *porta < 1 || *porta > 65535) return std::string("port invalida");
+    req.porta = static_cast<std::uint16_t>(*porta);
+
+    auto left = ler_int(params["left"]);
+    if (!left) return std::string("left invalido");
+    req.left = *left;
+
+    for (auto [nome, campo] : {std::pair{"uploaded", &req.uploaded},
+                               std::pair{"downloaded", &req.downloaded}}) {
+        if (!params.count(nome)) continue;
+        auto v = ler_int(params[nome]);
+        if (!v) return std::string(nome) + " invalido";
+        *campo = *v;
+    }
+
+    if (params.count("numwant")) {
+        auto v = ler_int(params["numwant"]);
+        if (!v) return std::string("numwant invalido");
+        req.numwant = static_cast<int>(std::min<std::int64_t>(*v, 1000));
+    }
+
+    const std::string evento = params.count("event") ? params["event"] : "";
+    if (evento.empty()) req.evento = Evento::Nenhum;
+    else if (evento == "started") req.evento = Evento::Started;
+    else if (evento == "completed") req.evento = Evento::Completed;
+    else if (evento == "stopped") req.evento = Evento::Stopped;
+    else return std::string("event invalido");
+
+    req.ip = params.count("ip") && !params["ip"].empty() ? params["ip"] : ip_remetente;
+    return req;
+}
+
+} // namespace tracker
