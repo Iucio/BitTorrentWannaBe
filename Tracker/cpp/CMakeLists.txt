@@ -13,3 +13,6 @@ add_library(tracker_core
     src/url.cpp
 )
 target_include_directories(tracker_core PUBLIC src)
+
+add_executable(tracker src/main.cpp)
+target_link_libraries(tracker PRIVATE tracker_core)
