@@ -8,6 +8,7 @@ add_library(tracker_core
     src/announce.cpp
     src/json.cpp
     src/repositorio.cpp
+    src/rotas.cpp
     src/servidor_http.cpp
     src/url.cpp
 )
