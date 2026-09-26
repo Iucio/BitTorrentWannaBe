@@ -10,7 +10,8 @@ RespostaHttp rotear(Tracker& tracker, const std::string& alvo, const std::string
     const std::string caminho = alvo.substr(0, interrogacao);
     const std::string query = interrogacao == std::string::npos ? "" : alvo.substr(interrogacao + 1);
 
-    if (caminho != "/announce") {
+    // /teste pra funcionar com o outro la por enquanto, dps fazer um proprio pra testes se for o caso
+    if (caminho != "/announce" && caminho != "/teste") {
         return {404, "{\"failure_reason\":\"caminho desconhecido\"}"};
     }
 
