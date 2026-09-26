@@ -34,7 +34,27 @@ std::string ler_cabecalho(int cliente) {
 }
 
 void atender(int cliente, const std::string& ip, const Handler& handler) {
-    // TODO
+    const std::string cabecalho = ler_cabecalho(cliente);
+    std::istringstream linha(cabecalho.substr(0, cabecalho.find("\r\n")));
+    std::string metodo, alvo, versao;
+    linha >> metodo >> alvo >> versao;
+
+    RespostaHttp resp;
+    if (metodo.empty() || alvo.empty()) {
+        resp = {400, "{\"failure_reason\":\"requisicao HTTP invalida\"}"};
+    } else if (metodo != "GET") {
+        resp = {405, "{\"failure_reason\":\"use GET\"}"};
+    } else {
+        try {
+            resp = handler(alvo, ip);
+        } catch (const std::exception& e) {
+            std::cerr << "[tracker] erro: " << e.what() << "\n";
+            resp = {500, "{\"failure_reason\":\"erro interno\"}"};
+        }
+    }
+    std::cout << "[tracker] " << ip << " " << metodo << " " << alvo.substr(0, alvo.find('?'))
+              << " -> " << resp.status << std::endl;
+    enviar(cliente, resp);
 }
 
 } // namespace
