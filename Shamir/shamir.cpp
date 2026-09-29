@@ -28,15 +28,17 @@ int eval(vector<int> a, int x, int p) {
 
 set<pair<int, int>> gen_keys(int S, int n, int k, int p) {
     random_device mt;
-    uniform_int_distribution<int> dist(1, p);
+    uniform_int_distribution<int> coef(0, p - 1);
+    uniform_int_distribution<int> nao_zero(1, p - 1); 
 
     vector<int> a(k);
     a[0] = S;
-    for (int i=1; i<k; i++) a[i] = dist(mt);
+    for (int i=1; i<k; i++) a[i] = coef(mt);
+    if (k > 1) a[k-1] = nao_zero(mt);
 
     set<pair<int, int>> keys;
     while (keys.size() < n) {
-        int x = dist(mt);
+        int x = nao_zero(mt);
         int y = eval(a, x, p);
         keys.insert(make_pair(x, y));
     }
@@ -118,7 +120,7 @@ int main() {
             }
 
             random_device mt;
-            uniform_int_distribution<int> dist(1, p);
+            uniform_int_distribution<int> dist(1, p - 1);
 
             for (int i=0; i<n; i++) {
                 int x = dist(mt);
