@@ -14,7 +14,7 @@ O Tracker não armazena nem transfere nenhum fragmento de arquivo: ele apenas in
 - Servidor HTTP próprio (somente `GET`)
 - Rota `/announce` (`/teste` só pra testes pequenos msm)
 - Leitura e validação dos parâmetros do announce
-- Registro de peers por `info_hash` (em memória)
+- Registro de peers por `info_hash`, persistido em SQLite (sobrevive a reinícios)
 - Tratamento dos eventos `started`, `completed` e `stopped`
 - Contagem de seeders (`complete`) e leechers (`incomplete`)
 - Respeito ao `min_interval` entre announces de rotina
@@ -29,10 +29,15 @@ O Tracker não armazena nem transfere nenhum fragmento de arquivo: ele apenas in
 - CMake
 - Sockets TCP
 - HTTP
+- SQLite 3
 
 ## Como compilar
 
-É necessário um ambiente Linux (ou WSL) com `g++` e, opcionalmente, `cmake`.
+É necessário um ambiente Linux (ou WSL) com `g++`, a biblioteca de desenvolvimento do SQLite e, opcionalmente, `cmake`:
+
+```bash
+sudo apt install g++ cmake libsqlite3-dev
+```
 
 Com CMake (recomendado, pq já define como compilr corretamente):
 
@@ -48,13 +53,13 @@ Sem CMake, direto com o `g++`:
 
 ```bash
 cd Tracker/cpp
-g++ -std=c++17 -O2 src/*.cpp -o tracker
+g++ -std=c++17 -O2 src/*.cpp -o tracker -lsqlite3
 ```
 
 ## Como executar
 
 ```bash
-./tracker [porta]
+./tracker [porta] [banco]
 ```
 
 A porta padrão é a `80`, contudo, portas abaixo de 1024 exigem `sudo`, então para testes locais é mais prático usar outra:
@@ -64,9 +69,12 @@ A porta padrão é a `80`, contudo, portas abaixo de 1024 exigem `sudo`, então 
 ```
 *Arbritario esse número
 
+O segundo argumento é o arquivo do banco SQLite (padrão `tracker.db`, na pasta de onde o Tracker foi executado). Se não existir, é criado com a tabela vazia. Os peers gravados continuam lá depois de reiniciar o Tracker, e os que passaram do prazo de expiração são removidos no próximo announce.
+
 Cada requisição atendida aparece no terminal:
 
 ```text
+[tracker] banco: tracker.db
 [tracker] ouvindo em 0.0.0.0:5023
 [tracker] 127.0.0.1 GET /announce -> 200
 ```
@@ -137,6 +145,36 @@ Os valores padrão ficam na struct `Config`, em `src/announce.hpp`:
 | `min_interval`     | 900 s  | Intervalo mínimo entre announces de rotina |
 | `fator_expiracao`  | 2      | Peer sem announce há `interval × fator` é removido |
 | `numwant_max`      | 50     | Máximo de peers por resposta |
+
+## Banco de dados
+
+O Tracker guarda os peers de cada swarm num banco SQLite embutido (`src/repositorio_sqlite.cpp`). O schema fica no início desse arquivo e é criado automaticamente na primeira execução:
+
+| Coluna            | Tipo    | Descrição |
+|-------------------|---------|-----------|
+| `info_hash`       | BLOB    | SHA-1 do arquivo, 20 bytes crus (chave, junto com `peer_id`) |
+| `peer_id`         | BLOB    | Identificador do cliente, 20 bytes |
+| `ip`              | TEXT    | IP divulgado aos outros peers |
+| `porta`           | INTEGER | Porta em que o peer aceita conexões |
+| `left_bytes`      | INTEGER | Bytes que faltam (`0` = seeder); usado para `complete`/`incomplete` |
+| `ultimo_announce` | INTEGER | Unix timestamp do último announce; usado no `min_interval` e na expiração |
+
+A chave primária é `(info_hash, peer_id)`: um arquivo tem vários peers e um peer pode estar em vários arquivos. Como `info_hash` é a primeira coluna da chave, as buscas por arquivo já usam esse índice. `complete` e `incomplete` são calculados a cada announce, não gravados.
+
+Para inspecionar o banco (precisa do pacote `sqlite3`):
+
+```bash
+sqlite3 tracker.db "SELECT hex(info_hash), CAST(peer_id AS TEXT), ip, porta, left_bytes, datetime(ultimo_announce, 'unixepoch') FROM peers;"
+```
+
+## Testes
+
+```bash
+cd Tracker/cpp/build
+ctest --output-on-failure    # ou ./teste_repositorio
+```
+
+Os testes rodam a mesma bateria no repositório em memória e no SQLite (inclui `info_hash` com byte nulo, contagem de seeders/leechers, `min_interval`, expiração e persistência depois de fechar o banco).
 
 ## Limitações conhecidas
 
