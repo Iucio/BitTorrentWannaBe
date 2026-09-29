@@ -1,4 +1,4 @@
-import random, string, socket, Sessao
+import random, string, socket, Sessao, time
 from enum import StrEnum
 from servicos.url_encoder import url_encode
 from servicos.request import request
@@ -55,6 +55,8 @@ class Cliente:
         try:
             print(f"\nDesligando...")
             self.servidor.shutdown(socket.SHUT_RDWR) # Finaliza a sessao
+            time.sleep(5)
             self.servidor.close() # Libera recursos 
+            time.sleep(5)
         except Exception as e:
             print()

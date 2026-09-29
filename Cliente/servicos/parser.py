@@ -94,7 +94,7 @@ def encoder(valor):
     bencode = ""
     if type(valor) == int:
         bencode += f"i{valor}e" # exemplo: valor = -67 => bencode = i-67e
-    elif type(valor) == str:
+    else:
         bencode += f"{len(valor)}:{valor}" # exemplo: valor = "chave" => bencode 5:chave
     return bencode
       
@@ -132,5 +132,12 @@ def encode_dict(dic:dict):
 def bencode(var): # Função para decidir se vai codificar ou decodificar baseada no tipo do argumento
     if type(var) == dict: # Dicionário para codificar em B-encode
         return encode_dict(var)
-    else: # String para decodificar para B-encode
-        return parse_bencode(var)[0][0] # Pela natureza da minha solução, tive que usar índices por causa da lista.
+    else: # String para decodificar para dicionário
+        dic = parse_bencode(var)[0][0]
+        # Nem sempre vou chamar esse função com um dicionário que tem piences como chave.
+        try:
+            # Encode, pois precisa ser em bytes.
+            dic["info"]["pieces"] = bytes(dic["info"]["pieces"].encode("latin1")) # Decode funciona APENAS em latin1
+        except:  
+            ""      
+        return dic # Pela natureza da minha solução, tive que usar índices por causa da lista.
