@@ -9,8 +9,9 @@
 
 namespace tracker {
 
-// Acesso ao banco. Hoje em memória, entra no de Carlos lá dps
-// dá pra trocar por SQLite (sql/schema.sql)
+// Acesso ao banco. Implementações:
+//   RepositorioMemoria (abaixo) - usado nos testes
+//   RepositorioSQLite (repositorio_sqlite.hpp) - usado pelo executável
 class Repositorio {
 public:
     virtual ~Repositorio() = default;
