@@ -13,7 +13,7 @@ dic_demo = ler_torrent("exemplo.txt.torrent")
 print(f"dicionario formado pelo cliente ao ler o .Torrent:\n{dic_demo}\n")
 
 # Inicio das sessoes nos arquivos (upload ou download)
-sessao = cliente.adicionar_sessao(dic_demo) 
+sessao = cliente.adicionar_sessao(dic_demo) # retorna info_hash da sessao
 
 
 # Primeiro announce

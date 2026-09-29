@@ -1,4 +1,4 @@
-import random, string, socket, Sessao, time
+import random, string, socket, Sessao, time, threading as t
 from enum import StrEnum
 from servicos.url_encoder import url_encode
 from servicos.request import request
@@ -34,23 +34,26 @@ class Cliente:
     def adicionar_sessao(self, arquivo:dict):
         nova_sessao = Sessao.Sessao(arquivo)
         self.sessoes[nova_sessao.info_hash] = nova_sessao
-        return nova_sessao
-
-    # Apenas para debugar, por enquanto
-    def get_sessoes(self):
-        return self.sessoes
+        thread = t.Thread(target=self._ativar_sessao, args=nova_sessao)
+        return nova_sessao.info_hash # retorna o Identificador da sessao
 
     # Requisição ao Tracker
     # Falta enviar pra rede (urllib3) e receber respostas
-    def announce(self, sessao:Sessao): 
-        url = url_encode(sessao, self.porta, self.peer_id, self.event)
-        #resposta = request(url)
+    def announce(self, info_hash): 
+        url = url_encode(self.sessoes[info_hash], self.porta, self.peer_id, self.event)
+        # resposta = request(url)
         self.event = Event.ACTIVE
+        
         return url # apenas para demonstração
+
+    def _ativar_sessao(self, sessao:Sessao):
+        while sessao.event != Event.STOPPED:
+            
+            pass
 
     def shutdown(self):
         self.event = Event.STOPPED
-        for sessao in self.sessoes.values():
+        for sessao in self.sessoes.keys():
             self.announce(sessao)
         try:
             print(f"\nDesligando...")
