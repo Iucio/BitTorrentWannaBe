@@ -27,7 +27,7 @@ int eval(vector<int> a, int x, int p) {
 }
 
 set<pair<int, int>> gen_keys(int S, int n, int k, int p) {
-    mt19937 mt(time(nullptr));
+    random_device mt;
     uniform_int_distribution<int> dist(1, p);
 
     vector<int> a(k);
@@ -117,7 +117,7 @@ int main() {
                 keys.insert(make_pair(x, y));
             }
 
-            mt19937 mt(time(nullptr));
+            random_device mt;
             uniform_int_distribution<int> dist(1, p);
 
             for (int i=0; i<n; i++) {
