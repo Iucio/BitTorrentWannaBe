@@ -3,6 +3,7 @@
 #include <sqlite3.h>
 
 #include <stdexcept>
+#include <string>
 
 namespace tracker {
 
@@ -11,6 +12,9 @@ namespace {
 // Tabela de peers do swarm. info_hash e peer_id são 20 bytes crus (podem
 // conter \0), por isso BLOB. A chave composta já serve de índice para as
 // buscas por info_hash, que é a primeira coluna dela.
+// uploaded/downloaded: totais da sessão atual do cliente, como ele informa no
+// announce (voltam a zero quando o cliente reinicia).
+const int VERSAO_SCHEMA = 2;
 const char* const SCHEMA = R"sql(
 CREATE TABLE IF NOT EXISTS peers (
     info_hash       BLOB    NOT NULL CHECK (length(info_hash) = 20),
@@ -19,12 +23,18 @@ CREATE TABLE IF NOT EXISTS peers (
     porta           INTEGER NOT NULL CHECK (porta BETWEEN 1 AND 65535),
     left_bytes      INTEGER NOT NULL CHECK (left_bytes >= 0), -- 0 = seeder
     ultimo_announce INTEGER NOT NULL,                         -- unix timestamp (s)
+    uploaded        INTEGER NOT NULL DEFAULT 0 CHECK (uploaded >= 0),
+    downloaded      INTEGER NOT NULL DEFAULT 0 CHECK (downloaded >= 0),
     PRIMARY KEY (info_hash, peer_id)
 ) WITHOUT ROWID;
 
 CREATE INDEX IF NOT EXISTS idx_peers_expiracao ON peers (ultimo_announce);
+)sql";
 
-PRAGMA user_version = 1;
+// Banco criado pela versão 1 (sem uploaded/downloaded): acrescenta as colunas.
+const char* const MIGRACAO_V1_PARA_V2 = R"sql(
+ALTER TABLE peers ADD COLUMN uploaded   INTEGER NOT NULL DEFAULT 0 CHECK (uploaded >= 0);
+ALTER TABLE peers ADD COLUMN downloaded INTEGER NOT NULL DEFAULT 0 CHECK (downloaded >= 0);
 )sql";
 
 // Garante que a consulta preparada volta ao estado inicial ao sair do escopo,
@@ -53,7 +63,7 @@ std::string ler_texto(sqlite3_stmt* st, int col) {
                  : std::string();
 }
 
-// colunas na ordem: peer_id, ip, porta, left_bytes, ultimo_announce
+// colunas na ordem: peer_id, ip, porta, left_bytes, ultimo_announce, uploaded, downloaded
 Peer ler_peer(sqlite3_stmt* st) {
     Peer p;
     p.peer_id = ler_blob(st, 0);
@@ -61,7 +71,8 @@ Peer ler_peer(sqlite3_stmt* st) {
     p.porta = static_cast<std::uint16_t>(sqlite3_column_int(st, 2));
     p.left = sqlite3_column_int64(st, 3);
     p.ultimo_announce = sqlite3_column_int64(st, 4);
-    // uploaded/downloaded não são persistidos (não entram na resposta do announce)
+    p.uploaded = sqlite3_column_int64(st, 5);
+    p.downloaded = sqlite3_column_int64(st, 6);
     return p;
 }
 
@@ -78,20 +89,24 @@ RepositorioSQLite::RepositorioSQLite(const std::string& caminho) {
         // WAL + NORMAL: cada escrita não força fsync, o announce continua rápido
         executar("PRAGMA journal_mode = WAL;");
         executar("PRAGMA synchronous = NORMAL;");
-        executar(SCHEMA);
+        criar_ou_migrar_schema();
 
         st_buscar_ = preparar(
-            "SELECT peer_id, ip, porta, left_bytes, ultimo_announce FROM peers "
+            "SELECT peer_id, ip, porta, left_bytes, ultimo_announce, uploaded, downloaded "
+            "FROM peers "
             "WHERE info_hash = ?1 AND peer_id = ?2;");
         st_salvar_ = preparar(
-            "INSERT INTO peers (info_hash, peer_id, ip, porta, left_bytes, ultimo_announce) "
-            "VALUES (?1, ?2, ?3, ?4, ?5, ?6) "
+            "INSERT INTO peers (info_hash, peer_id, ip, porta, left_bytes, ultimo_announce, "
+            "uploaded, downloaded) "
+            "VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8) "
             "ON CONFLICT (info_hash, peer_id) DO UPDATE SET "
             "ip = excluded.ip, porta = excluded.porta, left_bytes = excluded.left_bytes, "
-            "ultimo_announce = excluded.ultimo_announce;");
+            "ultimo_announce = excluded.ultimo_announce, "
+            "uploaded = excluded.uploaded, downloaded = excluded.downloaded;");
         st_remover_ = preparar("DELETE FROM peers WHERE info_hash = ?1 AND peer_id = ?2;");
         st_listar_ = preparar(
-            "SELECT peer_id, ip, porta, left_bytes, ultimo_announce FROM peers "
+            "SELECT peer_id, ip, porta, left_bytes, ultimo_announce, uploaded, downloaded "
+            "FROM peers "
             "WHERE info_hash = ?1;");
         st_expirados_ = preparar("DELETE FROM peers WHERE ultimo_announce < ?1;");
     } catch (...) {
@@ -131,6 +146,8 @@ void RepositorioSQLite::salvar_peer(const std::string& info_hash, const Peer& pe
     sqlite3_bind_int(st_salvar_, 4, peer.porta);
     sqlite3_bind_int64(st_salvar_, 5, peer.left);
     sqlite3_bind_int64(st_salvar_, 6, peer.ultimo_announce);
+    sqlite3_bind_int64(st_salvar_, 7, peer.uploaded);
+    sqlite3_bind_int64(st_salvar_, 8, peer.downloaded);
     if (sqlite3_step(st_salvar_) != SQLITE_DONE) erro("salvar_peer");
 }
 
@@ -155,6 +172,29 @@ void RepositorioSQLite::remover_expirados(Segundos limite) {
     UsoStmt uso{st_expirados_};
     sqlite3_bind_int64(st_expirados_, 1, limite);
     if (sqlite3_step(st_expirados_) != SQLITE_DONE) erro("remover_expirados");
+}
+
+// user_version fica gravado no próprio arquivo do banco e diz qual versão do
+// schema ele tem: 0 = banco novo, 1 = sem uploaded/downloaded, 2 = atual.
+void RepositorioSQLite::criar_ou_migrar_schema() {
+    int versao = 0;
+    sqlite3_stmt* st = preparar("PRAGMA user_version;");
+    if (sqlite3_step(st) == SQLITE_ROW) versao = sqlite3_column_int(st, 0);
+    sqlite3_finalize(st);
+
+    if (versao > VERSAO_SCHEMA)
+        throw std::runtime_error("banco criado por uma versao mais nova do Tracker");
+
+    executar("BEGIN;");
+    try {
+        executar(SCHEMA); // banco novo: cria a tabela já com todas as colunas
+        if (versao == 1) executar(MIGRACAO_V1_PARA_V2);
+        executar(("PRAGMA user_version = " + std::to_string(VERSAO_SCHEMA) + ";").c_str());
+        executar("COMMIT;");
+    } catch (...) {
+        sqlite3_exec(db_, "ROLLBACK;", nullptr, nullptr, nullptr);
+        throw;
+    }
 }
 
 void RepositorioSQLite::executar(const char* sql) {

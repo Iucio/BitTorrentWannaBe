@@ -29,6 +29,7 @@ public:
 
 private:
     void fechar();
+    void criar_ou_migrar_schema();
     void executar(const char* sql);
     sqlite3_stmt* preparar(const char* sql);
     [[noreturn]] void erro(const std::string& contexto) const;
