@@ -2,6 +2,8 @@
 // RepositorioSQLite, para garantir que os dois se comportam igual.
 // Uso: ./teste_repositorio   (ou ctest dentro da pasta build)
 
+#include <sqlite3.h>
+
 #include <cstdio>
 #include <functional>
 #include <iostream>
@@ -30,13 +32,16 @@ static std::string hash_binario(char c) {
     return h;
 }
 
-static Peer peer(const std::string& id, std::int64_t left, Segundos quando) {
+static Peer peer(const std::string& id, std::int64_t left, Segundos quando,
+                 std::int64_t uploaded = 0, std::int64_t downloaded = 0) {
     Peer p;
     p.peer_id = id;
     p.ip = "192.168.0.10";
     p.porta = 6881;
     p.left = left;
     p.ultimo_announce = quando;
+    p.uploaded = uploaded;
+    p.downloaded = downloaded;
     return p;
 }
 
@@ -56,6 +61,14 @@ static void testar_repositorio(Repositorio& repo) {
     repo.salvar_peer(arq1, peer(id1, 0, 2000));
     VERIFICA(repo.listar_peers(arq1).size() == 1);
     VERIFICA(repo.buscar_peer(arq1, id1)->completo());
+
+    // uploaded/downloaded: gravados e atualizados a cada announce
+    repo.salvar_peer(arq1, peer(id1, 0, 2100, 3000, 700));
+    achado = repo.buscar_peer(arq1, id1);
+    VERIFICA(achado && achado->uploaded == 3000 && achado->downloaded == 700);
+    repo.salvar_peer(arq1, peer(id1, 0, 2200, 5000, 900));
+    VERIFICA(repo.listar_peers(arq1).at(0).uploaded == 5000);
+    VERIFICA(repo.listar_peers(arq1).at(0).downloaded == 900);
 
     // vários peers no mesmo arquivo, e o mesmo peer em outro arquivo
     repo.salvar_peer(arq1, peer(id2, 50, 2000));
@@ -123,6 +136,37 @@ static void testar_persistencia() {
     for (const char* sufixo : {"", "-wal", "-shm"}) std::remove((arquivo + sufixo).c_str());
 }
 
+// Banco criado pela primeira versão (sem uploaded/downloaded) tem que continuar
+// funcionando: os dados antigos ficam, e as colunas novas começam em zero.
+static void testar_migracao() {
+    const std::string arquivo = "teste_migracao.db";
+    for (const char* sufixo : {"", "-wal", "-shm"}) std::remove((arquivo + sufixo).c_str());
+    sqlite3* db = nullptr;
+    sqlite3_open(arquivo.c_str(), &db);
+    sqlite3_exec(db,
+                 "CREATE TABLE peers (info_hash BLOB NOT NULL, peer_id BLOB NOT NULL,"
+                 " ip TEXT NOT NULL, porta INTEGER NOT NULL, left_bytes INTEGER NOT NULL,"
+                 " ultimo_announce INTEGER NOT NULL, PRIMARY KEY (info_hash, peer_id)) WITHOUT ROWID;"
+                 "INSERT INTO peers VALUES (zeroblob(20), CAST('-UF0001-antigo000000' AS BLOB), '10.0.0.9', 6881, 0, 99);"
+                 "PRAGMA user_version = 1;",
+                 nullptr, nullptr, nullptr);
+    sqlite3_close(db);
+
+    const std::string hash_antigo(20, '\0');
+    {
+        RepositorioSQLite repo(arquivo);
+        auto p = repo.buscar_peer(hash_antigo, "-UF0001-antigo000000");
+        VERIFICA(p && p->ultimo_announce == 99 && p->uploaded == 0 && p->downloaded == 0);
+        repo.salvar_peer(hash_antigo, peer("-UF0001-antigo000000", 0, 100, 10, 20));
+    }
+    {
+        RepositorioSQLite repo(arquivo); // reabrir não pode migrar de novo
+        auto p = repo.buscar_peer(hash_antigo, "-UF0001-antigo000000");
+        VERIFICA(p && p->uploaded == 10 && p->downloaded == 20);
+    }
+    for (const char* sufixo : {"", "-wal", "-shm"}) std::remove((arquivo + sufixo).c_str());
+}
+
 static void rodar(const char* nome, const std::function<void()>& teste) {
     const int antes = falhas;
     teste();
@@ -135,6 +179,7 @@ int main() {
     rodar("memoria: announce", [] { RepositorioMemoria r; testar_tracker(r); });
     rodar("sqlite: announce", [] { RepositorioSQLite r(":memory:"); testar_tracker(r); });
     rodar("sqlite: persiste depois de fechar", testar_persistencia);
+    rodar("sqlite: migra banco da versao anterior", testar_migracao);
 
     std::cout << (falhas ? "\nFALHOU\n" : "\ntodos os testes passaram\n");
     return falhas ? 1 : 0;
