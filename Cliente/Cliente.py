@@ -1,6 +1,5 @@
 import random, string, socket, Sessao, time, threading as t
 from enum import StrEnum
-from servicos.url_encoder import url_encode
 from servicos.request import request
 
 class Event(StrEnum):
@@ -14,7 +13,6 @@ class Cliente:
         self.peer_id = self._gerar_peer_id()
         self.servidor = self._gerar_servidor()
         self.host, self.porta = self.servidor.getsockname()
-        self.event = Event.STARTED
         self.sessoes = {}
 
     # Método privado da classe
@@ -34,21 +32,18 @@ class Cliente:
     def adicionar_sessao(self, arquivo:dict):
         nova_sessao = Sessao.Sessao(arquivo)
         self.sessoes[nova_sessao.info_hash] = nova_sessao
-        thread = t.Thread(target=self._ativar_sessao, args=nova_sessao)
+        thread = t.Thread(target=self._sessao_ativa, args=nova_sessao)
         return nova_sessao.info_hash # retorna o Identificador da sessao
 
-    # Requisição ao Tracker
-    # Falta enviar pra rede (urllib3) e receber respostas
-    def announce(self, info_hash): 
-        url = url_encode(self.sessoes[info_hash], self.porta, self.peer_id, self.event)
-        # resposta = request(url)
-        self.event = Event.ACTIVE
-        
-        return url # apenas para demonstração
-
-    def _ativar_sessao(self, sessao:Sessao):
+    def _sessao_ativa(self, sessao:Sessao):
+        # Loop principal da sessao. Aqui vai estar toda lógica dela
         while sessao.event != Event.STOPPED:
-            
+            resposta_tracker = sessao.announce(self.porta, self.peer_id, )
+            sessao.atualizar_dados_tracker(resposta_tracker)
+            for peer_ip, peer_porta in sessao.swarm:
+                # comunicação P2P com cada peer.
+                # Comunicação assíncrona (mais de um cada vez) ou síncrona (um de cada vez)? 
+                pass
             pass
 
     def shutdown(self):

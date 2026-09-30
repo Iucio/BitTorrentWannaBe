@@ -1,5 +1,4 @@
 import Cliente, os
-from servicos.parser import bencode
 from servicos.torrent_reader import ler_torrent
 from servicos.gerador_torrent import gerar_torrent
 

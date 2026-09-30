@@ -1,8 +1,8 @@
-import urllib3, json as j
+import urllib3
 
 
-def request(url): 
+def request_tracker(url): 
     http = urllib3.PoolManager()
     resposta = http.request("GET", url) 
-    return resposta.data
+    return resposta.json() # Transforma em dicionário
 
