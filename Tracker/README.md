@@ -158,14 +158,33 @@ O Tracker guarda os peers de cada swarm num banco SQLite embutido (`src/reposito
 | `porta`           | INTEGER | Porta em que o peer aceita conexões |
 | `left_bytes`      | INTEGER | Bytes que faltam (`0` = seeder); usado para `complete`/`incomplete` |
 | `ultimo_announce` | INTEGER | Unix timestamp do último announce; usado no `min_interval` e na expiração |
+| `uploaded`        | INTEGER | Bytes enviados pelo peer na sessão atual, como ele informa no announce |
+| `downloaded`      | INTEGER | Bytes baixados pelo peer na sessão atual, como ele informa no announce |
 
 A chave primária é `(info_hash, peer_id)`: um arquivo tem vários peers e um peer pode estar em vários arquivos. Como `info_hash` é a primeira coluna da chave, as buscas por arquivo já usam esse índice. `complete` e `incomplete` são calculados a cada announce, não gravados.
+
+A versão do schema fica gravada no próprio arquivo (`PRAGMA user_version`, hoje `2`). Um `tracker.db` criado pela versão anterior, sem `uploaded`/`downloaded`, é atualizado automaticamente ao abrir o Tracker: os peers já gravados são mantidos e as colunas novas começam em zero.
 
 Para inspecionar o banco (precisa do pacote `sqlite3`):
 
 ```bash
 sqlite3 tracker.db "SELECT hex(info_hash), CAST(peer_id AS TEXT), ip, porta, left_bytes, datetime(ultimo_announce, 'unixepoch') FROM peers;"
 ```
+
+### Ranking dos peers ativos
+
+`uploaded` e `downloaded` permitem ver quem está compartilhando mais **entre os peers ativos no momento**. Como um peer aparece uma vez por arquivo, a consulta soma as linhas de cada `peer_id`:
+
+```bash
+sqlite3 tracker.db "SELECT CAST(peer_id AS TEXT) AS peer, SUM(uploaded) AS enviou, SUM(downloaded) AS baixou FROM peers GROUP BY peer_id ORDER BY enviou DESC;"
+```
+
+É uma visão de curto prazo, não um histórico:
+
+- os valores são os totais da sessão atual do cliente e voltam a zero quando ele reinicia;
+- um peer que sai com `event=stopped` é removido na hora e deixa de aparecer; um que cai sem avisar aparece até expirar;
+- o `peer_id` é gerado a cada execução do cliente, então a mesma pessoa aparece como peers diferentes se reabrir o programa;
+- os números são informados pelo próprio cliente, e o Tracker não tem como conferi-los.
 
 ## Testes
 
@@ -174,7 +193,7 @@ cd Tracker/cpp/build
 ctest --output-on-failure    # ou ./teste_repositorio
 ```
 
-Os testes rodam a mesma bateria no repositório em memória e no SQLite (inclui `info_hash` com byte nulo, contagem de seeders/leechers, `min_interval`, expiração e persistência depois de fechar o banco).
+Os testes rodam a mesma bateria no repositório em memória e no SQLite (inclui `info_hash` com byte nulo, gravação de `uploaded`/`downloaded`, contagem de seeders/leechers, `min_interval`, expiração, persistência depois de fechar o banco e migração de um banco da versão anterior).
 
 ## Limitações conhecidas
 
