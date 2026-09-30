@@ -1,18 +1,17 @@
 from servicos.info_hash import infhash
 from servicos.url_encoder import url_encode
 from servicos.request import request_tracker
-from Cliente import Event
 
 class Sessao:
-    def __init__(self, arquivo, uploaded=0, downloaded=0, left=0, event=Event.STARTED):
+    def __init__(self, torrent, uploaded=0, downloaded=0, left=0, event="started"):
         # Dados da sessão
-        self.info_hash = infhash(arquivo) # Extrai o info_hash do arquivo
-        self.tracker = arquivo["announce"] # Endereço do Tracker
+        self.info_hash = infhash(torrent) # Extrai o info_hash do torrent
+        self.tracker = torrent["announce"] # Endereço do Tracker
         self.uploaded = uploaded # Quantos bytes foram compartilhados na rede pelo nó
         self.downloaded = downloaded # Quantos bytes o nó baixou da rede
         self.left = left # Quantos bytes faltam para baixar do arquivo espeficicado pelo info_hash
-        self.arquivo = arquivo # Dicionário do .Torrent
-        self.private = arquivo["private"] # Define se o arquivo é privado ou não
+        self.torrent = torrent # Dicionário do .torrent
+        self.private = torrent["private"] # Define se o arquivo é privado ou não
         self.event = event
         # Dados retornados pelo Tracker
         self.interval = 0

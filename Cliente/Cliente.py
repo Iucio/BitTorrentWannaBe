@@ -1,6 +1,6 @@
 import random, string, socket, Sessao, time, threading as t
 from enum import StrEnum
-from servicos.request import request
+from servicos.request import request_tracker
 
 class Event(StrEnum):
     STARTED = "started" # Início da aplicação (primeiro announce)
@@ -33,6 +33,7 @@ class Cliente:
         nova_sessao = Sessao.Sessao(arquivo)
         self.sessoes[nova_sessao.info_hash] = nova_sessao
         thread = t.Thread(target=self._sessao_ativa, args=nova_sessao)
+        thread.start()
         return nova_sessao.info_hash # retorna o Identificador da sessao
 
     def _sessao_ativa(self, sessao:Sessao):
@@ -43,6 +44,8 @@ class Cliente:
             for peer_ip, peer_porta in sessao.swarm:
                 # comunicação P2P com cada peer.
                 # Comunicação assíncrona (mais de um cada vez) ou síncrona (um de cada vez)? 
+
+
                 pass
             pass
 

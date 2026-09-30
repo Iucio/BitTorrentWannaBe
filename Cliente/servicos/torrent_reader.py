@@ -1,4 +1,4 @@
-from servicos.parser import bencode
+from parser import bencode
 
 def ler_torrent(caminho):
     with open(caminho, "rb") as arquivo:
