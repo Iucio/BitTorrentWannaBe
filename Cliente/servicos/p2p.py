@@ -10,7 +10,7 @@
 # Posição no buffer = [begin : begin + tamanho_do_bloco] Ele faz um slice no bytearray
 
 from torrent_reader import ler_torrent
-import hashlib
+import hashlib, struct
 
 def validar_peca(indice, peca, pieces): # pieces = hashes concatenados de todos as pecas
 
@@ -38,6 +38,24 @@ def fragmentar_arquivo(caminho, piece_length):
         map_index_peca.update({i : lista_pecas[i]})
     return map_index_peca
 
+def parse_bitfield(bitfield_bytes: bytes, total_pieces:int):
+    indices_desejados = []
+
+    for piece_index in range(total_pieces):
+        byte_index = piece_index // 8 # Cada byte ocupa 8 peças (8 bits), separo byte por byte do bitfield
+        bit_offset = 7 - (piece_index % 8) # Descobre a posição exata do bit. Como os bits são lidos da esquerda pra direita, a primeira peça do byte (resto 0) fica no bity 7 (mais á esquerda), depois assim por diante
+
+        if (bitfield_bytes[byte_index] >> bit_offset) and 1: # Muito complexo pra explicar em uma linha. Faz a operação: bitwise right shift
+            indices_desejados.append(piece_index)
+
+    return indices_desejados
+
+def handshake(info_hash, peer_dst, peer_id, socket):
+    pstr = b"BitTorrentWannaBe"
+    pstrlen = len(pstr)
+    pacote = struct.pack(">B17s20s20s", pstrlen, pstr, info_hash, peer_id)
+    
+
 mapa = fragmentar_arquivo("exemplo.txt", 132)
 torrent = ler_torrent("exemplo.txt.torrent")
 
@@ -48,3 +66,6 @@ for indice, peca in mapa.items():
         print("SUCESSO")
     else:
         print("ERRO")
+
+
+
