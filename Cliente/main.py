@@ -23,5 +23,6 @@ print(f"Omissao do campo event nos announces seguintes (url):\n{cliente.announce
 # Desligamento da aplicação
 # Envia announces contendo o campo event=stopped para cada sessao (info_hash) 
 cliente.shutdown()
+
 #os.remove("exemplo.txt")
 #os.remove("exemplo.txt.torrent")

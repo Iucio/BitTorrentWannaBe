@@ -4,7 +4,8 @@ from servicos.parser import bencode
 def gerar_torrent(caminho_arquivo, url_tracker, piece_length=32):
     # Lê os bytes do arquivo
     with open(caminho_arquivo, "w") as arquivo:
-        arquivo.write("Hello World!")
+        for i in range(0, 1000):
+            arquivo.write(str(i))
     with open(caminho_arquivo, "rb") as arquivo:
         conteudo = arquivo.read()
 
@@ -38,3 +39,6 @@ def gerar_torrent(caminho_arquivo, url_tracker, piece_length=32):
     # Escrevo em bytes. Para ler o arquivo precisa decodificar em latin1, isso é importante para o hash das peças.
     with open(f"{caminho_arquivo}.torrent", "wb") as arquivo:
        arquivo.write(bytes(torrent.encode("latin1"))) 
+    return caminho_arquivo
+
+gerar_torrent("exemplo.txt", "https://exemplo.tracker.com", 132)
