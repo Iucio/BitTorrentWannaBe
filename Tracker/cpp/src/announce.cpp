@@ -5,9 +5,11 @@
 
 namespace tracker {
 
+// Unix timestamp: precisa ser o relógio de parede (system_clock) porque o valor
+// fica gravado no banco e tem que continuar valendo depois de reiniciar o Tracker
 Segundos relogio_sistema() {
     using namespace std::chrono;
-    return duration_cast<seconds>(steady_clock::now().time_since_epoch()).count();
+    return duration_cast<seconds>(system_clock::now().time_since_epoch()).count();
 }
 
 Tracker::Tracker(Repositorio& repo, Config config, std::function<Segundos()> relogio)
