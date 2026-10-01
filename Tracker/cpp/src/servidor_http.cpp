@@ -3,6 +3,7 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <unistd.h>
 
 #include <iostream>
@@ -11,6 +12,16 @@
 namespace tracker {
 
 namespace {
+
+// uma conexão por vez(por enquanto): cliente parado não pode segurar o servidor
+constexpr int SEGUNDOS_LIMITE = 5;
+
+void limitar_espera(int cliente) {
+    timeval tempo{};
+    tempo.tv_sec = SEGUNDOS_LIMITE;
+    setsockopt(cliente, SOL_SOCKET, SO_RCVTIMEO, &tempo, sizeof tempo);
+    setsockopt(cliente, SOL_SOCKET, SO_SNDTIMEO, &tempo, sizeof tempo);
+}
 
 const char* texto_status(int status) {
     switch (status) {
@@ -100,6 +111,7 @@ bool servir(std::uint16_t porta, const Handler& handler) {
         socklen_t tamanho = sizeof remoto;
         int cliente = accept(servidor, reinterpret_cast<sockaddr*>(&remoto), &tamanho);
         if (cliente < 0) continue;
+        limitar_espera(cliente);
 
         char ip[INET_ADDRSTRLEN] = {0};
         inet_ntop(AF_INET, &remoto.sin_addr, ip, sizeof ip);
