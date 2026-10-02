@@ -1,7 +1,7 @@
 from servicos.info_hash import infhash
 from servicos.url_encoder import url_encode
 from servicos.request import request_tracker
-from Cliente import Event
+from evento import Event
 from servicos.p2p import handshake, parse_bitfield
 import threading, math
 
