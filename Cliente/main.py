@@ -15,7 +15,7 @@ dic_demo = ler_torrent("exemplo.txt.torrent")
 print(f"dicionario formado pelo cliente ao ler o .Torrent:\n{dic_demo}\n")
 
 # Inicio das sessoes nos arquivos (upload ou download)
-sessao = cliente.instanciar_sessao(dic_demo) # retorna info_hash da sessao
+sessao = cliente.instanciar_sessao(dic_demo, "exemplo.txt") # Já tem o arquivo: compartilha (seeder). Retorna info_hash da sessao
 
 
 # Primeiro announce
@@ -27,6 +27,9 @@ print(f"Resposta do Tracker:\n{resposta}\n")
 print("=== Omissao do campo event nos announces seguintes ===")
 resposta = cliente.announce(sessao)
 print(f"Resposta do Tracker:\n{resposta}\n")
+
+# Compartilha até o usuário mandar sair. Enquanto isso, outros peers podem baixar
+input("Compartilhando exemplo.txt. Aperte Enter para sair\n")
 
 # Desligamento da aplicação
 # Envia announces contendo o campo event=stopped para cada sessao (info_hash) 

@@ -2,7 +2,8 @@ from servicos.info_hash import infhash
 from servicos.url_encoder import url_encode
 from servicos.request import request_tracker
 from evento import Event
-from servicos.p2p import handshake, parse_bitfield
+from servicos.p2p import handshake, parse_bitfield, fragmentar_arquivo, validar_peca
+from servicos.mensagens import Handshake, Bitfield, Unchoke, Interested, Request, Piece, ErroProtocolo, TAMANHO_BLOCO, bitfield_de_pecas, ler_mensagem
 import threading, math
 
 class Sessao:
@@ -16,6 +17,8 @@ class Sessao:
         self.downloaded = downloaded # Quantos bytes o nó baixou da rede
         self.left = left # Quantos bytes faltam para baixar do arquivo espeficicado pelo info_hash
         self.event = event
+        self.qtd_pecas = math.ceil(torrent["info"]["length"] / torrent["info"]["piece length"]) # Arredonda pra cima caso seja quebrado
+        self.pecas = {} # Peças que este nó já tem: indice -> bytes
         # Lista de peers daquele arquivo
         self.swarm = [] # Ex: [("19.75.87.9", 8000), ("11.123.43.6", 9080)]
         # Dados retornados pelo Tracker
@@ -56,9 +59,32 @@ class Sessao:
         # Depois desse for, tendo as peças mapeadas por peer. Só preciso mandar os requests para cada peer.
         # As peças que chegarem devem ser validadas usando a função validar_peca(indice:int, peca:bytes, pieces:campo pieces do .torrent)
 
-    # Caminho do upload -> SEEDER
-    def upload(self, socket):
-        pass
+    # Seeder: lê o arquivo e guarda só as peças que batem com o hash do .torrent
+    def carregar_arquivo(self, caminho):
+        info = self.torrent["info"]
+        for indice, peca in fragmentar_arquivo(caminho, info["piece length"]).items():
+            if validar_peca(indice, peca, info["pieces"]):
+                self.pecas[indice] = peca
+        self.left = info["length"] - sum(len(peca) for peca in self.pecas.values())
+
+    # Caminho do upload -> SEEDER. O peer já mandou o handshake dele
+    def upload(self, conexao):
+        conexao.sendall(Handshake(self.info_hash, self.peer_id).para_bytes())
+        conexao.sendall(Bitfield(bitfield_de_pecas(self.pecas, self.qtd_pecas)).para_bytes()) # Avisa quais peças tem
+        while True: # Até o peer desconectar
+            mensagem = ler_mensagem(conexao)
+            if isinstance(mensagem, Interested):
+                conexao.sendall(Unchoke().para_bytes()) # Libera os pedidos
+            elif isinstance(mensagem, Request):
+                conexao.sendall(self._bloco(mensagem).para_bytes())
+
+    # Recorta o bloco pedido. Pedido fora da peça derruba a conexão
+    def _bloco(self, pedido):
+        peca = self.pecas.get(pedido.indice)
+        if peca is None or pedido.tamanho > TAMANHO_BLOCO or pedido.inicio + pedido.tamanho > len(peca):
+            raise ErroProtocolo(f"pedido invalido: {pedido}")
+        self.uploaded += pedido.tamanho
+        return Piece(pedido.indice, pedido.inicio, peca[pedido.inicio:pedido.inicio + pedido.tamanho])
 
     # Decide se vai ser upload ou download, além de outras coisas.
     def gerenciador_sessao(self, socket):
