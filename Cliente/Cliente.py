@@ -30,6 +30,13 @@ class Cliente:
         thread_sessao = t.Thread(target=nova_sessao.gerenciador_sessao, args=(self.server))
         return nova_sessao.info_hash # retorna o Identificador da sessao
 
+    # Announce de uma sessao com o event atual dela. Retorna a resposta do Tracker
+    def announce(self, info_hash):
+        sessao = self.sessoes[info_hash]
+        resposta = sessao.announce(self.porta, self.peer_id, sessao.event)
+        sessao.atualizar_dados_tracker(resposta)
+        return resposta
+
     def shutdown(self):
         self.event = Event.STOPPED
         for sessao in self.sessoes.keys():
