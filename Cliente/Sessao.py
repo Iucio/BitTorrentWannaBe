@@ -2,7 +2,7 @@ from servicos.info_hash import infhash
 from servicos.url_encoder import url_encode
 from servicos.request import request_tracker
 from evento import Event
-from servicos.p2p import handshake, parse_bitfield
+from servicos.p2p import handshake, parse_bitfield, fragmentar_arquivo, validar_peca
 import threading, math
 
 class Sessao:
@@ -16,6 +16,8 @@ class Sessao:
         self.downloaded = downloaded # Quantos bytes o nó baixou da rede
         self.left = left # Quantos bytes faltam para baixar do arquivo espeficicado pelo info_hash
         self.event = event
+        self.qtd_pecas = math.ceil(torrent["info"]["length"] / torrent["info"]["piece length"]) # Arredonda pra cima caso seja quebrado
+        self.pecas = {} # Peças que este nó já tem: indice -> bytes
         # Lista de peers daquele arquivo
         self.swarm = [] # Ex: [("19.75.87.9", 8000), ("11.123.43.6", 9080)]
         # Dados retornados pelo Tracker
@@ -55,6 +57,14 @@ class Sessao:
 
         # Depois desse for, tendo as peças mapeadas por peer. Só preciso mandar os requests para cada peer.
         # As peças que chegarem devem ser validadas usando a função validar_peca(indice:int, peca:bytes, pieces:campo pieces do .torrent)
+
+    # Seeder: lê o arquivo e guarda só as peças que batem com o hash do .torrent
+    def carregar_arquivo(self, caminho):
+        info = self.torrent["info"]
+        for indice, peca in fragmentar_arquivo(caminho, info["piece length"]).items():
+            if validar_peca(indice, peca, info["pieces"]):
+                self.pecas[indice] = peca
+        self.left = info["length"] - sum(len(peca) for peca in self.pecas.values())
 
     # Caminho do upload -> SEEDER
     def upload(self, socket):

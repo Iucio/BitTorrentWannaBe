@@ -48,9 +48,11 @@ class Cliente:
                 pass
         print(f"Peer desconectou: {endereco[0]}:{endereco[1]}")
 
-    # Salva a sessão por info_hash como chave de busca
-    def instanciar_sessao(self, torrent):
+    # Salva a sessão por info_hash como chave de busca. Com caminho_arquivo, o nó já tem o arquivo e vira seeder
+    def instanciar_sessao(self, torrent, caminho_arquivo=None):
         nova_sessao = Sessao.Sessao(torrent, self.peer_id)
+        if caminho_arquivo:
+            nova_sessao.carregar_arquivo(caminho_arquivo)
         self.sessoes[nova_sessao.info_hash] = nova_sessao
         thread_sessao = t.Thread(target=nova_sessao.gerenciador_sessao, args=(self.server))
         return nova_sessao.info_hash # retorna o Identificador da sessao
