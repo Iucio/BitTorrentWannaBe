@@ -6,6 +6,7 @@
 #include <sys/time.h>
 #include <unistd.h>
 
+#include <chrono>
 #include <iostream>
 #include <sstream>
 
@@ -51,10 +52,12 @@ void enviar(int cliente, const RespostaHttp& resp) {
 }
 
 // só o cabecalho (get não tem corpo) no maximo 8 KB
+// o prazo vale pra leitura toda: mandar 1 byte por vez não segura o servidor
 std::string ler_cabecalho(int cliente) {
+    const auto prazo = std::chrono::steady_clock::now() + std::chrono::seconds(SEGUNDOS_LIMITE);
     std::string dados;
     char buf[1024];
-    while (dados.find("\r\n\r\n") == std::string::npos && dados.size() < 8192) {
+    while (dados.find("\r\n\r\n") == std::string::npos && dados.size() < 8192 && std::chrono::steady_clock::now() < prazo) {
         auto n = recv(cliente, buf, sizeof buf, 0);
         if (n <= 0) break;
         dados.append(buf, static_cast<std::size_t>(n));
