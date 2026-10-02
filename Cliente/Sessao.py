@@ -35,7 +35,7 @@ class Sessao:
             self.swarm.append(peer)
 
     def announce(self, porta, peer_id, event): # informações que ficam no Cliente
-        url = url_encode(self.info_hash, porta, peer_id, event)
+        url = url_encode(self, porta, peer_id, event)
         return request_tracker(url) # Dicionário contendo a resposta do Tracker 
 
     # Caminho do download -> LEECHER
