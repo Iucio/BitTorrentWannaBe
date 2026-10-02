@@ -26,6 +26,8 @@ class Sessao:
 
     # Atualizar dados interos através da resposta do Tracker
     def atualizar_dados_tracker(self, dados_tracker:dict):
+        if "failure_reason" in dados_tracker: # Tracker recusou o announce, nada muda
+            return
         self.interval = dados_tracker["interval"]
         self.min_interval = dados_tracker["min_interval"]
         self.complete = dados_tracker["complete"]
