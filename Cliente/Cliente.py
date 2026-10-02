@@ -39,7 +39,7 @@ class Cliente:
 
     def shutdown(self):
         self.event = Event.STOPPED
-        for sessao in self.sessoes.keys():
+        for sessao in self.sessoes.values():
             sessao.shutdown(self.porta, self.peer_id)
         try:
             print(f"\nDesligando...")
