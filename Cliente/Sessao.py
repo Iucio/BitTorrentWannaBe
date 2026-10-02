@@ -70,4 +70,4 @@ class Sessao:
 
     # Envia event=stopped para o tracker, sinalizando a saída do nó da rede.
     def shutdown(self, porta, peer_id):
-        return self.announce(self.info_hash, porta, peer_id, Event.STOPPED)
+        return self.announce(porta, peer_id, Event.STOPPED)

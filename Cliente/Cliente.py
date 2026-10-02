@@ -1,5 +1,4 @@
-import random, string, socket, Sessao, time, threading as t
-from evento import Event
+import random, string, socket, Sessao, threading as t
 from servicos.request import request_tracker
 
 class Cliente:
@@ -38,17 +37,10 @@ class Cliente:
         return resposta
 
     def shutdown(self):
-        self.event = Event.STOPPED
+        print(f"\nDesligando...")
         for sessao in self.sessoes.values():
             sessao.shutdown(self.porta, self.peer_id)
-        try:
-            print(f"\nDesligando...")
-            self.server.shutdown(socket.SHUT_RDWR) # Finaliza a sessao
-            time.sleep(5)
-            self.server.close() # Libera recursos 
-            time.sleep(5)
-        except Exception as e:
-            print()
+        self.server.close() # Libera recursos
 
     def _interface(self):
         print(f"+-------------------+\n| BitTorrentWannaBe |\n+-------------------+")
