@@ -3,6 +3,7 @@ from servicos.url_encoder import url_encode
 from servicos.request import request_tracker
 from evento import Event
 from servicos.p2p import handshake, parse_bitfield, fragmentar_arquivo, validar_peca
+from servicos.mensagens import Handshake, Bitfield, Unchoke, Interested, bitfield_de_pecas, ler_mensagem
 import threading, math
 
 class Sessao:
@@ -66,9 +67,14 @@ class Sessao:
                 self.pecas[indice] = peca
         self.left = info["length"] - sum(len(peca) for peca in self.pecas.values())
 
-    # Caminho do upload -> SEEDER
-    def upload(self, socket):
-        pass
+    # Caminho do upload -> SEEDER. O peer já mandou o handshake dele
+    def upload(self, conexao):
+        conexao.sendall(Handshake(self.info_hash, self.peer_id).para_bytes())
+        conexao.sendall(Bitfield(bitfield_de_pecas(self.pecas, self.qtd_pecas)).para_bytes()) # Avisa quais peças tem
+        while True: # Até o peer desconectar
+            mensagem = ler_mensagem(conexao)
+            if isinstance(mensagem, Interested):
+                conexao.sendall(Unchoke().para_bytes()) # Libera os pedidos
 
     # Decide se vai ser upload ou download, além de outras coisas.
     def gerenciador_sessao(self, socket):
