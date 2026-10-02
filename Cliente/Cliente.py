@@ -36,17 +36,25 @@ class Cliente:
 
     # O handshake do peer diz de qual arquivo (info_hash) ele quer peças
     def _atender_peer(self, conexao, endereco):
-        print(f"Peer conectou: {endereco[0]}:{endereco[1]}")
+        peer = f"{endereco[0]}:{endereco[1]}"
+        print(f"Peer conectou: {peer}")
         conexao.settimeout(60) # Peer parado por 1 min é desconectado
+        motivo = "saiu"
         with conexao:
             try:
                 handshake = ler_handshake(conexao)
                 sessao = self.sessoes.get(handshake.info_hash)
                 if sessao:
                     sessao.upload(conexao)
-            except (OSError, ErroProtocolo): # Peer saiu ou mandou algo fora do protocolo
+                else:
+                    motivo = "pediu um arquivo que este cliente não tem"
+            except ErroProtocolo as erro: # Peer mandou algo fora do protocolo
+                motivo = str(erro)
+            except TimeoutError:
+                motivo = "ficou 1 min parado"
+            except OSError: # Peer fechou a conexão
                 pass
-        print(f"Peer desconectou: {endereco[0]}:{endereco[1]}")
+        print(f"Peer desconectou: {peer} ({motivo})")
 
     # Salva a sessão por info_hash como chave de busca. Com caminho_arquivo, o nó já tem o arquivo e vira seeder
     def instanciar_sessao(self, torrent, caminho_arquivo=None):

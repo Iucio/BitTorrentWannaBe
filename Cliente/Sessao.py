@@ -3,7 +3,7 @@ from servicos.url_encoder import url_encode
 from servicos.request import request_tracker
 from evento import Event
 from servicos.p2p import handshake, parse_bitfield, fragmentar_arquivo, validar_peca
-from servicos.mensagens import Handshake, Bitfield, Unchoke, Interested, bitfield_de_pecas, ler_mensagem
+from servicos.mensagens import Handshake, Bitfield, Unchoke, Interested, Request, Piece, ErroProtocolo, TAMANHO_BLOCO, bitfield_de_pecas, ler_mensagem
 import threading, math
 
 class Sessao:
@@ -75,6 +75,16 @@ class Sessao:
             mensagem = ler_mensagem(conexao)
             if isinstance(mensagem, Interested):
                 conexao.sendall(Unchoke().para_bytes()) # Libera os pedidos
+            elif isinstance(mensagem, Request):
+                conexao.sendall(self._bloco(mensagem).para_bytes())
+
+    # Recorta o bloco pedido. Pedido fora da peça derruba a conexão
+    def _bloco(self, pedido):
+        peca = self.pecas.get(pedido.indice)
+        if peca is None or pedido.tamanho > TAMANHO_BLOCO or pedido.inicio + pedido.tamanho > len(peca):
+            raise ErroProtocolo(f"pedido invalido: {pedido}")
+        self.uploaded += pedido.tamanho
+        return Piece(pedido.indice, pedido.inicio, peca[pedido.inicio:pedido.inicio + pedido.tamanho])
 
     # Decide se vai ser upload ou download, além de outras coisas.
     def gerenciador_sessao(self, socket):
