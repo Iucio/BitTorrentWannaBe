@@ -1,15 +1,6 @@
 import random, string, socket, Sessao, time, threading as t
-from enum import StrEnum
+from evento import Event
 from servicos.request import request_tracker
-
-class Event(StrEnum):
-    STARTED = "started" # Início da aplicação (primeiro announce)
-    COMPLETED = "completed" # Download completo de um arquivo
-    STOPPED = "stopped" # Término da aplicação (ultimo announce)
-    # Sessao de donwload
-    ACTIVE = "" # Omição do event na url. (Nenum arquivo foi baixado por completo e o cliente não saiu da rede) 
-    # Sessao de Upload
-    SEEDER = "seeder" 
 
 class Cliente:
     def __init__(self):
