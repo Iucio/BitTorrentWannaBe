@@ -221,3 +221,7 @@ __marimo__/
 tracker.db
 *.db-wal
 *.db-shm
+
+# Arquivos de exemplo gerados pelo main.py e pelos testes do Cliente
+Cliente/exemplo.txt
+Cliente/exemplo.txt.torrent

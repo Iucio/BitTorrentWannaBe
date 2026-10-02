@@ -19,9 +19,14 @@ sessao = cliente.instanciar_sessao(dic_demo) # retorna info_hash da sessao
 
 
 # Primeiro announce
-print(f"Primeiro announce (resposta do Tracker):\n{cliente.announce(sessao)}\n")
+print("=== Primeiro announce ===")
+resposta = cliente.announce(sessao) # A Sessao mostra a url antes de enviar
+print(f"Resposta do Tracker:\n{resposta}\n")
+
 # Omissao do event
-print(f"Omissao do campo event nos announces seguintes (resposta do Tracker):\n{cliente.announce(sessao)}\n")
+print("=== Omissao do campo event nos announces seguintes ===")
+resposta = cliente.announce(sessao)
+print(f"Resposta do Tracker:\n{resposta}\n")
 
 # Desligamento da aplicação
 # Envia announces contendo o campo event=stopped para cada sessao (info_hash) 

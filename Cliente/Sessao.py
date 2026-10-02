@@ -38,6 +38,7 @@ class Sessao:
 
     def announce(self, porta, peer_id, event): # informações que ficam no Cliente
         url = url_encode(self, porta, peer_id, event)
+        print(f"Requisição ao Tracker:\n{url}") # Mostra todo announce, inclusive o stopped do shutdown
         return request_tracker(url) # Dicionário contendo a resposta do Tracker 
 
     # Caminho do download -> LEECHER
