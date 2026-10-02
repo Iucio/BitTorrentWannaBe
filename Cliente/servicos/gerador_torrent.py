@@ -41,4 +41,6 @@ def gerar_torrent(caminho_arquivo, url_tracker, piece_length=32):
        arquivo.write(bytes(torrent.encode("latin1"))) 
     return caminho_arquivo
 
-gerar_torrent("exemplo.txt", "https://exemplo.tracker.com", 132)
+# Teste rápido, só roda chamando direto (de dentro de Cliente): python3 -m servicos.gerador_torrent
+if __name__ == "__main__":
+    gerar_torrent("exemplo.txt", "https://exemplo.tracker.com", 132)
