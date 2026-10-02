@@ -56,16 +56,17 @@ def handshake(info_hash, peer_dst, peer_id, socket):
     pacote = struct.pack(">B17s20s20s", pstrlen, pstr, info_hash, peer_id)
     
 
-mapa = fragmentar_arquivo("exemplo.txt", 132)
-torrent = ler_torrent("exemplo.txt.torrent")
+# Teste rápido, só roda chamando direto (de dentro de Cliente): python3 -m servicos.p2p
+if __name__ == "__main__":
+    mapa = fragmentar_arquivo("exemplo.txt", 132)
+    torrent = ler_torrent("exemplo.txt.torrent")
 
-
-for indice, peca in mapa.items():
-    peca = validar_peca(indice, peca, torrent["info"]["pieces"])
-    if peca:
-        print("SUCESSO")
-    else:
-        print("ERRO")
+    for indice, peca in mapa.items():
+        peca = validar_peca(indice, peca, torrent["info"]["pieces"])
+        if peca:
+            print("SUCESSO")
+        else:
+            print("ERRO")
 
 
 
