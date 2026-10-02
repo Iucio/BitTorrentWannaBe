@@ -9,7 +9,7 @@
 # Alocar buffer na memória com o tamanho totalal da peça: bytearray(piece_length)
 # Posição no buffer = [begin : begin + tamanho_do_bloco] Ele faz um slice no bytearray
 
-from torrent_reader import ler_torrent
+from servicos.torrent_reader import ler_torrent
 import hashlib, struct
 
 def validar_peca(indice, peca, pieces): # pieces = hashes concatenados de todos as pecas
