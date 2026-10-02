@@ -31,7 +31,7 @@ class Sessao:
         self.complete = dados_tracker["complete"]
         self.incomplete = dados_tracker["incomplete"]
         self.event = Event.ACTIVE
-        for peer in dados_tracker["peer_list"]:
+        for peer in dados_tracker["peers"]:
             self.swarm.append(peer)
 
     def announce(self, porta, peer_id, event): # informações que ficam no Cliente
