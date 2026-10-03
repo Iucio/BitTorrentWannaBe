@@ -36,15 +36,15 @@ class Cliente:
     def instanciar_sessao(self, torrent):
         nova_sessao = Sessao.Sessao(torrent, self.peer_id)
         self.sessoes[nova_sessao.info_hash] = nova_sessao
-        thread_sessao = t.Thread(target=nova_sessao.gerenciador_sessao, args=(self.server))
-        return nova_sessao.info_hash # retorna o Identificador da sessao
+        #nova_sessao.announce(self.porta, self.peer_id)
+        return nova_sessao 
 
     def shutdown(self):
         self.event = Event.STOPPED
-        for sessao in self.sessoes.keys():
+        for sessao in self.sessoes.values():
             sessao.shutdown(self.porta, self.peer_id)
         try:
-            print(f"\nDesligando...")
+            print(f"\nDesligando cliente...")
             self.server.shutdown(socket.SHUT_RDWR) # Finaliza a sessao
             time.sleep(5)
             self.server.close() # Libera recursos 

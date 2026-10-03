@@ -1,9 +1,12 @@
+import threading, socket as s, time, math, progressbar
 from servicos.info_hash import infhash
 from servicos.url_encoder import url_encode
 from servicos.request import request_tracker
-from Cliente import Event
-from servicos.p2p import handshake, parse_bitfield
-import threading, math
+from servicos.mensagens import (
+    TAMANHO_HANDSHAKE, Bitfield, Choke, ErroProtocolo, Handshake, Have, Interested,
+    NotInterested, Piece, Request, Unchoke, bitfield_de_pecas, ler_handshake, ler_mensagem, pecas_do_bitfield,
+)
+from GerenciadorDownload import GerenciadorDownload
 
 class Sessao:
     def __init__(self, torrent, peer_id, uploaded=0, downloaded=0, left=0, event="started"):
@@ -17,7 +20,7 @@ class Sessao:
         self.left = left # Quantos bytes faltam para baixar do arquivo espeficicado pelo info_hash
         self.event = event
         # Lista de peers daquele arquivo
-        self.swarm = [] # Ex: [("19.75.87.9", 8000), ("11.123.43.6", 9080)]
+        self.swarm = [("127.0.0.1", 6881)] # Ex: [("19.75.87.9", 8000), ("11.123.43.6", 9080)]
         # Dados retornados pelo Tracker
         self.interval = 0
         self.min_interval = 0
@@ -25,47 +28,45 @@ class Sessao:
         self.incomplete = 0
 
     # Atualizar dados interos através da resposta do Tracker
-    def atualizar_dados_tracker(self, dados_tracker:dict):
+    def _atualizar_dados_tracker(self, dados_tracker:dict):
         self.interval = dados_tracker["interval"]
         self.min_interval = dados_tracker["min_interval"]
         self.complete = dados_tracker["complete"]
         self.incomplete = dados_tracker["incomplete"]
-        self.event = Event.ACTIVE
+        self.event = "" # Omite o campo event nas próximas requisições o tracker
         for peer in dados_tracker["peer_list"]:
             self.swarm.append(peer)
 
     def announce(self, porta, peer_id, event): # informações que ficam no Cliente
         url = url_encode(self.info_hash, porta, peer_id, event)
-        return request_tracker(url) # Dicionário contendo a resposta do Tracker 
+        dados_tracker = request_tracker(url) # Dicionário contendo a resposta do Tracker 
+        self._atualizar_dados_tracker(dados_tracker)
 
     # Caminho do download -> LEECHER
-    def download(self, socket):
-        resposta_tracker = self.announce(self.porta, self.peer_id, self.event)
-        self.atualizar_dados_tracker(resposta_tracker)
-        qtd_pecas = math.ceil(self.torrent["info"]["length"] / self.torrent["info"]["piece length"]) # Arredonda pra cima caso seja quebrado
-        map_peca_peer = {}
+    def download(self):
+        
+        gerenciador = GerenciadorDownload(self.torrent["info"], self.info_hash, self.peer_id, self.swarm)
+        gerenciador.instanciar_mini_leechers(self.swarm)
+        time.sleep(3)
 
-        for peer in self.swarm:
-            bitfield = handshake(self.info_hash, peer, self.peer_id, socket)
-            pecas_desejadas = parse_bitfield(bitfield, qtd_pecas)
-            map_peca_peer.update({peer : pecas_desejadas}) # Mapeio quais peças cada peer que contatei têm. Depois posso pedir cada peça para um peer diferente, dependendo da disponibilidade
+        thread_orquestador = threading.Thread(target=gerenciador.orquestrador, daemon=True)
+        thread_orquestador.start()
 
-        # Depois desse for, tendo as peças mapeadas por peer. Só preciso mandar os requests para cada peer.
-        # As peças que chegarem devem ser validadas usando a função validar_peca(indice:int, peca:bytes, pieces:campo pieces do .torrent)
+        barra = progressbar.ProgressBar(max_value=gerenciador.total_pecas)
+        while len(gerenciador.pecas_baixadas) < gerenciador.total_pecas:
+            barra.update(len(gerenciador.pecas_baixadas))
+            time.sleep(0.25)
 
+        barra.finish()
+        print(f"\n DOWNLOAD CONCLUÍDO COM SUCESSO!")
+        self.event = "completed"
+
+        
     # Caminho do upload -> SEEDER
     def upload(self, socket):
         pass
 
-    # Decide se vai ser upload ou download, além de outras coisas.
-    def gerenciador_sessao(self, socket):
-        if self.tipo == "seeder":
-            retorno = self.upload(socket)
-        else:
-            retorno = self.download(socket)
-        if retorno:
-            print(retorno)
-
-    # Envia event=stopped para o tracker, sinalizando a saída do nó da rede.
+    # Envia event=stopped para o tracker, sinalizando o término da sessao
     def shutdown(self, porta, peer_id):
-        return self.announce(self.info_hash, porta, peer_id, Event.STOPPED)
+        print(f"DESLIGANDO SESSAO...  {self.event}")
+        #return self.announce(self.info_hash, porta, peer_id, "stopped")

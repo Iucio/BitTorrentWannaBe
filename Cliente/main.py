@@ -1,28 +1,18 @@
-import Cliente, os
+import Cliente
+from pathlib import Path
 from servicos.torrent_reader import ler_torrent
-from servicos.gerador_torrent import gerar_torrent
 
 # Início do programa
 cliente = Cliente.Cliente()
 
-# Exemplo de torrent (adiquirido pela Internet ou localmente)
-gerar_torrent("exemplo.txt", "http://tracker.com")
-dic_demo = ler_torrent("exemplo.txt.torrent")
-
-print(f"dicionario formado pelo cliente ao ler o .Torrent:\n{dic_demo}\n")
+dir = Path(__file__).parent.parent
+path = dir / "Arquivo demo/spyxfamily_op.mp4.torrent"
+spyxfamily = ler_torrent(path)
 
 # Inicio das sessoes nos arquivos (upload ou download)
-sessao = cliente.adicionar_sessao(dic_demo) # retorna info_hash da sessao
+sessao = cliente.instanciar_sessao(spyxfamily) # retorna info_hash da sessao
 
-
-# Primeiro announce
-print(f"Primeiro announce (url):\n{cliente.announce(sessao)}\n")
-# Omissao do event
-print(f"Omissao do campo event nos announces seguintes (url):\n{cliente.announce(sessao)}\n")
-
+sessao.download()
 # Desligamento da aplicação
 # Envia announces contendo o campo event=stopped para cada sessao (info_hash) 
 cliente.shutdown()
-
-#os.remove("exemplo.txt")
-#os.remove("exemplo.txt.torrent")

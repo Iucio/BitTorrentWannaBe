@@ -219,6 +219,7 @@ def decodificar(conteudo: bytes) -> Mensagem:
 # Bitfield
 # ---------------------------------------------------------------------------
 
+# Monta o pacote do bitfield
 def bitfield_de_pecas(pecas: Iterable[int], numero_de_pecas: int) -> bytes:
     """Peça 0 é o bit mais à esquerda do primeiro byte. Ex.: peças {0, 1, 9} de 10 → C0 40."""
     bits = bytearray((numero_de_pecas + 7) // 8)
@@ -228,7 +229,7 @@ def bitfield_de_pecas(pecas: Iterable[int], numero_de_pecas: int) -> bytes:
         bits[indice // 8] |= 0x80 >> (indice % 8)
     return bytes(bits)
 
-
+# Lê o payload do pacote bitfield, lê o bitfield
 def pecas_do_bitfield(bits: bytes, numero_de_pecas: int) -> set:
     """Inverso de bitfield_de_pecas. Rejeita tamanho errado e bits de sobra ligados."""
     esperado = (numero_de_pecas + 7) // 8
@@ -260,12 +261,11 @@ def recv_exato(sock, n: int) -> bytes:
     return b"".join(partes)
 
 
-def ler_mensagem(sock, limite: int = LIMITE_MENSAGEM) -> Mensagem:
+def ler_mensagem(sock) -> Mensagem:
     """Lê uma mensagem completa: primeiro o tamanho, depois exatamente esse tanto de bytes."""
     (tamanho,) = struct.unpack(">I", recv_exato(sock, 4))
-    if tamanho > limite:
-        raise ErroProtocolo(f"mensagem de {tamanho} bytes passa do limite de {limite}")
-    return decodificar(recv_exato(sock, tamanho))
+    pacote = recv_exato(sock, tamanho)
+    return decodificar(pacote)
 
 
 def ler_handshake(sock) -> Handshake:

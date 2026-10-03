@@ -1,11 +1,9 @@
 import hashlib
-from servicos.parser import bencode
+from pathlib import Path
+from parser import bencode
 
 def gerar_torrent(caminho_arquivo, url_tracker, piece_length=32):
     # Lê os bytes do arquivo
-    with open(caminho_arquivo, "w") as arquivo:
-        for i in range(0, 1000):
-            arquivo.write(str(i))
     with open(caminho_arquivo, "rb") as arquivo:
         conteudo = arquivo.read()
 
@@ -23,7 +21,7 @@ def gerar_torrent(caminho_arquivo, url_tracker, piece_length=32):
 
     info = {
         "length": tamanho_total,
-        "name": caminho_arquivo,
+        "name": caminho_arquivo.name,
         "piece length": piece_length,
         "pieces": hashes_conc_str # string para a biblioteca parser funcionar
     }
@@ -41,4 +39,6 @@ def gerar_torrent(caminho_arquivo, url_tracker, piece_length=32):
        arquivo.write(bytes(torrent.encode("latin1"))) 
     return caminho_arquivo
 
-gerar_torrent("exemplo.txt", "https://exemplo.tracker.com", 132)
+dir = Path(__file__).parent.parent.parent
+path = dir / "Arquivo demo/spyxfamily_op.mp4"
+gerar_torrent(path, "https://exemplo.tracker.com", 131072) 
