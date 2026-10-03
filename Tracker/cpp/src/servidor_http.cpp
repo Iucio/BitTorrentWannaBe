@@ -3,14 +3,26 @@
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <unistd.h>
 
+#include <chrono>
 #include <iostream>
 #include <sstream>
 
 namespace tracker {
 
 namespace {
+
+// uma conexão por vez(por enquanto): cliente parado não pode segurar o servidor
+constexpr int SEGUNDOS_LIMITE = 5;
+
+void limitar_espera(int cliente) {
+    timeval tempo{};
+    tempo.tv_sec = SEGUNDOS_LIMITE;
+    setsockopt(cliente, SOL_SOCKET, SO_RCVTIMEO, &tempo, sizeof tempo);
+    setsockopt(cliente, SOL_SOCKET, SO_SNDTIMEO, &tempo, sizeof tempo);
+}
 
 const char* texto_status(int status) {
     switch (status) {
@@ -40,10 +52,12 @@ void enviar(int cliente, const RespostaHttp& resp) {
 }
 
 // só o cabecalho (get não tem corpo) no maximo 8 KB
+// o prazo vale pra leitura toda: mandar 1 byte por vez não segura o servidor
 std::string ler_cabecalho(int cliente) {
+    const auto prazo = std::chrono::steady_clock::now() + std::chrono::seconds(SEGUNDOS_LIMITE);
     std::string dados;
     char buf[1024];
-    while (dados.find("\r\n\r\n") == std::string::npos && dados.size() < 8192) {
+    while (dados.find("\r\n\r\n") == std::string::npos && dados.size() < 8192 && std::chrono::steady_clock::now() < prazo) {
         auto n = recv(cliente, buf, sizeof buf, 0);
         if (n <= 0) break;
         dados.append(buf, static_cast<std::size_t>(n));
@@ -100,6 +114,7 @@ bool servir(std::uint16_t porta, const Handler& handler) {
         socklen_t tamanho = sizeof remoto;
         int cliente = accept(servidor, reinterpret_cast<sockaddr*>(&remoto), &tamanho);
         if (cliente < 0) continue;
+        limitar_espera(cliente);
 
         char ip[INET_ADDRSTRLEN] = {0};
         inet_ntop(AF_INET, &remoto.sin_addr, ip, sizeof ip);

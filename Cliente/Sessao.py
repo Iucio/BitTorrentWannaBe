@@ -19,6 +19,8 @@ class Sessao:
         self.downloaded = downloaded # Quantos bytes o nó baixou da rede
         self.left = left # Quantos bytes faltam para baixar do arquivo espeficicado pelo info_hash
         self.event = event
+        self.qtd_pecas = math.ceil(torrent["info"]["length"] / torrent["info"]["piece length"]) # Arredonda pra cima caso seja quebrado
+        self.pecas = {} # Peças que este nó já tem: indice -> bytes
         # Lista de peers daquele arquivo
         self.swarm = [("127.0.0.1", 6881)] # Ex: [("19.75.87.9", 8000), ("11.123.43.6", 9080)]
         # Dados retornados pelo Tracker
@@ -28,13 +30,15 @@ class Sessao:
         self.incomplete = 0
 
     # Atualizar dados interos através da resposta do Tracker
-    def _atualizar_dados_tracker(self, dados_tracker:dict):
+    def atualizar_dados_tracker(self, dados_tracker:dict):
+        if "failure_reason" in dados_tracker: # Tracker recusou o announce, nada muda
+            return
         self.interval = dados_tracker["interval"]
         self.min_interval = dados_tracker["min_interval"]
         self.complete = dados_tracker["complete"]
         self.incomplete = dados_tracker["incomplete"]
-        self.event = "" # Omite o campo event nas próximas requisições o tracker
-        for peer in dados_tracker["peer_list"]:
+        self.event = Event.ACTIVE
+        for peer in dados_tracker["peers"]:
             self.swarm.append(peer)
 
     def announce(self, porta, peer_id, event): # informações que ficam no Cliente

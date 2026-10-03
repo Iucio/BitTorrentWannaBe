@@ -1,16 +1,40 @@
 import Cliente
 from pathlib import Path
 from servicos.torrent_reader import ler_torrent
+from servicos.gerador_torrent import gerar_torrent
+
+# Tracker rodando na mesma máquina: ./tracker 6969
+TRACKER = "http://127.0.0.1:6969"
 
 # Início do programa
 cliente = Cliente.Cliente()
 
+# Exemplo de torrent (adiquirido pela Internet ou localmente)
+gerar_torrent("exemplo.txt", TRACKER)
+dic_demo = ler_torrent("exemplo.txt.torrent")
+
+print(f"dicionario formado pelo cliente ao ler o .Torrent:\n{dic_demo}\n")
 dir = Path(__file__).parent.parent
 path = dir / "Arquivo demo/spyxfamily_op.mp4.torrent"
 spyxfamily = ler_torrent(path)
 
 # Inicio das sessoes nos arquivos (upload ou download)
+sessao = cliente.instanciar_sessao(dic_demo, "exemplo.txt") # Já tem o arquivo: compartilha (seeder). Retorna info_hash da sessao
 sessao = cliente.instanciar_sessao(spyxfamily) # retorna info_hash da sessao
+
+
+# Primeiro announce
+print("=== Primeiro announce ===")
+resposta = cliente.announce(sessao) # A Sessao mostra a url antes de enviar
+print(f"Resposta do Tracker:\n{resposta}\n")
+
+# Omissao do event
+print("=== Omissao do campo event nos announces seguintes ===")
+resposta = cliente.announce(sessao)
+print(f"Resposta do Tracker:\n{resposta}\n")
+
+# Compartilha até o usuário mandar sair. Enquanto isso, outros peers podem baixar
+input("Compartilhando exemplo.txt. Aperte Enter para sair\n")
 
 sessao.download()
 # Desligamento da aplicação

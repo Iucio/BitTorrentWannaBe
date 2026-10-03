@@ -93,7 +93,7 @@ Cada requisição atendida aparece no terminal:
 | `downloaded` | não | Total de bytes baixados |
 | `event`      | não | `started`, `completed` ou `stopped`; omitido no announce de rotina |
 | `numwant`    | não | Quantidade de peers desejada (padrão 50, máximo 50) |
-| `ip`         | não | IP a ser divulgado; se omitido, usa o IP de quem conectou |
+| `ip`         | não | Ignorado: o Tracker divulga sempre o IP de quem conectou |
 
 Exemplo com `curl`:
 
@@ -199,7 +199,7 @@ Os testes rodam a mesma bateria no repositório em memória e no SQLite (inclui 
 
 Esta é uma primeira versão. Pontos ainda em aberto:
 
-- O servidor atende uma conexão por vez
+- O servidor atende uma conexão por vez (cada uma tem até 5 s para enviar o pedido)
 - Ainda não há controle de acesso: qualquer cliente pode anunciar ou remover peers
 - A rota `/teste` é provisória e responde igual à `/announce`
 
