@@ -1,6 +1,7 @@
-import random, string, socket, Sessao, threading as t
+import random, string, socket, Sessao, threading as t, time
 from servicos.request import request_tracker
 from servicos.mensagens import ler_handshake, ErroProtocolo
+from evento import Event
 
 class Cliente:
     def __init__(self):
@@ -38,21 +39,23 @@ class Cliente:
     def _atender_peer(self, conexao, endereco):
         peer = f"{endereco[0]}:{endereco[1]}"
         print(f"Peer conectou: {peer}")
-        conexao.settimeout(60) # Peer parado por 1 min é desconectado
+        #conexao.settimeout(60) # Peer parado por 1 min é desconectado
         motivo = "saiu"
-        with conexao:
-            try:
+        
+        try:
                 handshake = ler_handshake(conexao)
+                if handshake:
+                    print("Handshake recebido")
                 sessao = self.sessoes.get(handshake.info_hash)
                 if sessao:
                     sessao.upload(conexao)
                 else:
                     motivo = "pediu um arquivo que este cliente não tem"
-            except ErroProtocolo as erro: # Peer mandou algo fora do protocolo
+        except ErroProtocolo as erro: # Peer mandou algo fora do protocolo
                 motivo = str(erro)
-            except TimeoutError:
+        except TimeoutError:
                 motivo = "ficou 1 min parado"
-            except OSError: # Peer fechou a conexão
+        except OSError: # Peer fechou a conexão
                 pass
         print(f"Peer desconectou: {peer} ({motivo})")
 
@@ -75,7 +78,7 @@ class Cliente:
     def shutdown(self):
         print(f"\nDesligando...")
         for sessao in self.sessoes.values():
-        self.event = Event.STOPPED
+            self.event = Event.STOPPED
         for sessao in self.sessoes.values():
             sessao.shutdown(self.porta, self.peer_id)
         self.server.close() # Libera recursos

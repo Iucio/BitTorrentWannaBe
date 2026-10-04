@@ -45,6 +45,7 @@ class GerenciadorDownload:
                     mini_leecher = MiniLeecher(self, peer, self.hash_pecas, self.piece_length, self.info_hash, self.peer_id, self.total_pecas)
                     self.mini_leechers_ativos.update({peer : mini_leecher})
                     mini_leecher.start()
+                    
         print("[GerenciadorDownload]: sucesso")
 
     # Salva no disco a peça, validada, na posição correta
@@ -131,10 +132,15 @@ class MiniLeecher(threading.Thread):
 
             # Abre a conexão, realiza o handshake e recebe o bitfield. Retorna as peças que aquele peer tem
             pecas_do_peer = self.handshake()
+            #print("Recebeu bitfield")
 
             # Registra as peças no mapa para o gerenciador designar quais threads vão pedir quais peças
             self.gerenciador.registrar_pecas(self.peer, pecas_do_peer)
-            time.sleep(3)  
+             
+            if type(self.interested()) == Unchoke: # Liberou geral!
+                self.choked = False
+                print(f"[MiniLeecher] {self.peer}: unchoke")
+            time.sleep(3)
             self._loop_trabalho()
                 
         except Exception as e:
@@ -151,11 +157,7 @@ class MiniLeecher(threading.Thread):
     def handshake(self) -> set:
         pack_handshake = Handshake(self.info_hash, self.peer_id).para_bytes()
         self.sock.sendall(pack_handshake) # Mando o handshake para o peer
-        handshake_resposta = ler_handshake(self.sock)
-
         bitfield = ler_mensagem(self.sock) # Resposta do outro peer
-
-
         return pecas_do_bitfield(bitfield.bits, self.total_pecas) # Transformo em um set de peças
 
     def adicionar_request_fila(self, index:int, begin:int, length=16384):
@@ -174,15 +176,8 @@ class MiniLeecher(threading.Thread):
         return ler_mensagem(self.sock) # Deve ser Unchoke ou Choke
         
     def _loop_trabalho(self):
-        if type(self.interested()) == Unchoke: # Liberou geral!
-            self.choked = False
-            print(f"[MiniLeecher] {self.peer}: unchoke")
         while not self.choked and not self.fila_request.empty():
                 self._processar_peca()
-
-        #print("saiu do loop!")
-        #print(self.choked)
-        #print(self.fila_request.empty())
 
             
 
@@ -190,12 +185,7 @@ class MiniLeecher(threading.Thread):
         index, begin, length = self.fila_request.get()
         tamanho_peca = self._calcular_tamanho_peca(index) 
         buffer_peca = bytearray(tamanho_peca)
-        #print("INDEX", index)
-        #print("TAMANHO PECA: ", tamanho_peca)
-        #print("TAMANHO BUFFER: ", len(buffer_peca))
         total_blocos = math.ceil(tamanho_peca / 16384) # Tamanho padrão dos blocos
-        #print("TOTAL BLOCOS", total_blocos)
-            # Aloca um buffer na RAM do tamanho da peça
         blocos_recebidos = 0
         while blocos_recebidos < total_blocos:
                 # Manda o Request para o seeder
@@ -213,8 +203,7 @@ class MiniLeecher(threading.Thread):
                     break
                 elif blocos_recebidos < total_blocos:
                     index, begin, length = self.fila_request.get()
-                    
-                
+                     
         if validar_peca(index, buffer_peca, self.hash_pecas):
             self.gerenciador.escrever_peca_disco(index, buffer_peca)
             #print(f"[MiniLeecher] peca validada: {index}")
