@@ -144,7 +144,7 @@ class MiniLeecher(threading.Thread):
             self._loop_trabalho()
                 
         except Exception as e:
-            print(f"[-] MiniLeecher {self.peer} erro: {e}")
+            print(f"[MiniLeecher] {self.peer} erro: {e}")
             # O peer não respondeu ao handshake, pode estar offline. 
             # Termino essa thread e excluo ela das ativas
             with self.gerenciador.lock_mini_leechers_ativos:

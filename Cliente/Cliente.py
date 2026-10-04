@@ -1,7 +1,7 @@
 import random, string, socket, Sessao, threading as t, time
 from servicos.request import request_tracker
 from servicos.mensagens import ler_handshake, ErroProtocolo
-from evento import Event
+from servicos.evento import Event
 
 class Cliente:
     def __init__(self):
@@ -10,7 +10,7 @@ class Cliente:
         self.host, self.porta = self.server.getsockname()
         self.sessoes = {}
         self._interface()
-        print(f"Esperando peers na porta {self.porta}\n")
+        print(f"[BitTorrentWannaBe] Esperando peers na porta {self.porta}\n")
         t.Thread(target=self._aceitar_peers, daemon=True).start() # Atende outros peers em segundo plano
 
     # Método privado da classe
@@ -38,26 +38,26 @@ class Cliente:
     # O handshake do peer diz de qual arquivo (info_hash) ele quer peças
     def _atender_peer(self, conexao, endereco):
         peer = f"{endereco[0]}:{endereco[1]}"
-        print(f"Peer conectou: {peer}")
+        print(f"[Seeder] Peer conectou: {peer}")
         #conexao.settimeout(60) # Peer parado por 1 min é desconectado
         motivo = "saiu"
         
         try:
                 handshake = ler_handshake(conexao)
                 if handshake:
-                    print("Handshake recebido")
+                    print("[Seeder] Handshake recebido")
                 sessao = self.sessoes.get(handshake.info_hash)
                 if sessao:
                     sessao.upload(conexao)
                 else:
-                    motivo = "pediu um arquivo que este cliente não tem"
+                    motivo = "[Seeder] pediu um arquivo que este cliente não tem"
         except ErroProtocolo as erro: # Peer mandou algo fora do protocolo
                 motivo = str(erro)
         except TimeoutError:
-                motivo = "ficou 1 min parado"
+                motivo = "[Seeder] ficou 1 min parado"
         except OSError: # Peer fechou a conexão
                 pass
-        print(f"Peer desconectou: {peer} ({motivo})")
+        print(f"[Seeder] Peer desconectou: {peer} ({motivo})")
 
     # Salva a sessão por info_hash como chave de busca. Com caminho_arquivo, o nó já tem o arquivo e vira seeder
     def instanciar_sessao(self, torrent, caminho_arquivo=None):
@@ -76,18 +76,16 @@ class Cliente:
         return resposta
 
     def shutdown(self):
-        print(f"\nDesligando...")
+        print(f"\n[BitTorrentWannaBe] Desligando...")
         for sessao in self.sessoes.values():
             self.event = Event.STOPPED
         for sessao in self.sessoes.values():
             sessao.shutdown(self.porta, self.peer_id)
         self.server.close() # Libera recursos
         try:
-            print(f"\nDesligando cliente...")
+            print(f"\n[BitTorrentWannaBe] Desligando cliente...")
             self.server.shutdown(socket.SHUT_RDWR) # Finaliza a sessao
-            time.sleep(5)
             self.server.close() # Libera recursos 
-            time.sleep(5)
         except Exception as e:
             print()
 

@@ -1,11 +1,11 @@
-import threading, socket as s, time, math, progressbar
+import threading, time, math, progressbar
 from servicos.info_hash import infhash
 from servicos.url_encoder import url_encode
 from servicos.request import request_tracker
 from GerenciadorDownload import GerenciadorDownload
-from servicos.p2p import fragmentar_arquivo, validar_peca
-from servicos.mensagens import Handshake, Bitfield, Unchoke, Interested, Request, Piece, ErroProtocolo, TAMANHO_BLOCO, bitfield_de_pecas, ler_mensagem
-from evento import Event
+from servicos.p2p import fragmentar_arquivo
+from servicos.mensagens import Bitfield, Unchoke, Interested, Request, Piece, bitfield_de_pecas, ler_mensagem
+from servicos.evento import Event
 
 class Sessao:
     def __init__(self, torrent, peer_id, uploaded=0, downloaded=0, left=0, event="started"):
@@ -78,14 +78,14 @@ class Sessao:
         conexao.sendall(bitfield.para_bytes()) # Avisa quais peças tem
         while True: # Até o peer desconectar
             mensagem = ler_mensagem(conexao)
-            print(mensagem)
 
             if isinstance(mensagem, Request):
                 bloco = self._bloco(mensagem)
+                print(f"[Seeder] Mandando peca {mensagem.indice}")
                 conexao.sendall(bloco.para_bytes())
             # Libera os pedidos
             elif isinstance(mensagem, Interested):
-                print("MANDANDO UNCHOKE")
+                print("[Seeder] Mandando unchoke...")
                 conexao.sendall(Unchoke().para_bytes())
 
     # Recorta o bloco pedido. Pedido fora da peça derruba a conexão
@@ -96,5 +96,5 @@ class Sessao:
 
     # Envia event=stopped para o tracker, sinalizando o término da sessao
     def shutdown(self, porta, peer_id):
-        print(f"DESLIGANDO SESSAO...  {self.event}")
+        print(f"[BitTorrentWannaBe] DESLIGANDO SESSAO...  {self.event}")
         #return self.announce(self.info_hash, porta, peer_id, "stopped")
