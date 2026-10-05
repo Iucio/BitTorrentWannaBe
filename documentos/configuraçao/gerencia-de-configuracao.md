@@ -2,71 +2,86 @@
 
 ## Estratégia de Branches
 
-O projeto utilizará uma estratégia de branches para organizar o desenvolvimento
-e evitar alterações diretas na versão principal.
+O projeto utiliza Git e GitHub para controle de versões.
 
-### Branch main
+A estratégia de ramificação adotada utiliza duas branches principais:
 
-A branch `main` representa a versão principal e estável do projeto.
+- `main`
+- `develop`
 
-Não devem ser realizadas alterações diretamente na branch `main`.
+### Branch `main`
 
-### Branch develop
+A branch `main` representa a versão estável e entregável do projeto.
 
-A branch `develop` será utilizada para o desenvolvimento e integração das
-funcionalidades do projeto.
+Ela deve conter apenas versões consideradas adequadas para apresentação ou entrega.
 
-As alterações realizadas nas branches de funcionalidades serão integradas
-primeiramente na `develop`.
+As alterações não são desenvolvidas diretamente na `main`.
 
-### Branches de funcionalidades
+### Branch `develop`
 
-Cada tarefa ou funcionalidade deverá ser desenvolvida em uma branch própria,
-criada a partir da branch `develop`.
+A branch `develop` é utilizada para o desenvolvimento e integração das alterações realizadas pela equipe.
 
-O padrão de nomenclatura será:
+As novas funcionalidades, correções e atualizações de documentação são incorporadas inicialmente na `develop`.
 
-`feature/nome-da-tarefa`
-
-Exemplos:
-
-- `feature/criar-tracker`
-- `feature/criar-cliente-p2p`
-- `feature/comunicacao`
-- `feature/testes`
-
-Após a conclusão da tarefa, a branch `feature` deverá ser integrada à branch
-`develop`.
+Quando o conjunto de alterações é considerado estável, é aberto um Pull Request da `develop` para a `main`.
 
 ### Fluxo de desenvolvimento
 
-O fluxo definido para o projeto será:
+O fluxo adotado pelo projeto é:
 
-`feature/* → develop → main`
+`develop → main`
 
-A branch `main` receberá somente versões consideradas estáveis do projeto.
+A `develop` representa o estado atual de desenvolvimento do sistema, enquanto a `main` representa versões estáveis e entregáveis.
+
+## Pull Requests
+
+Os Pull Requests são utilizados para registrar a integração das alterações da branch `develop` para a branch `main`.
+
+Antes do merge, as alterações devem ser revisadas para garantir que a versão integrada esteja adequada para entrega ou demonstração.
 
 ## Commits
 
-Os commits deverão possuir mensagens objetivas, descrevendo a alteração
-realizada.
+Os commits devem possuir mensagens objetivas, descrevendo a alteração realizada.
 
-Exemplo:
+Exemplos:
 
-`Adiciona estrutura inicial da documentação`
+- `Adiciona estrutura inicial da documentação`
+- `Implementa parser Bencode`
+- `Atualiza análise de riscos`
+- `Corrige comunicação com Tracker`
+
+## Controle de Modificações
+
+O projeto utiliza GitHub Issues para registrar e acompanhar tarefas, funcionalidades e alterações.
+
+As Issues podem conter:
+
+- responsável;
+- milestone;
+- labels;
+- descrição da atividade;
+- critérios de aceite;
+- relacionamento com outras Issues.
+
+As Issues concluídas são marcadas como fechadas, mantendo o histórico das atividades realizadas.
+
+## Milestones
+
+Os milestones são utilizados para agrupar Issues relacionadas às principais etapas do projeto:
+
+- `Planejamento e Documentação`;
+- `Desenvolvimento do Sistema`;
+- `Testes e Entrega`.
 
 ## Organização da documentação
 
-A documentação do projeto será mantida dentro da pasta `documentos/`,
-organizada por categorias.
+A documentação do projeto é mantida dentro da pasta `documentos/`, organizada por categorias:
 
-Estrutura prevista:
-
-- `configuracao/` — documentos relacionados à configuração e gerenciamento do projeto;
+- `configuracao/` — gerência de configuração e versionamento;
 - `cronograma/` — cronograma e planejamento temporal;
 - `eap/` — Estrutura Analítica do Projeto;
-- `monitoramento/` — acompanhamento do projeto;
-- `planejamento/` — documentos de planejamento;
+- `monitoramento/` — Burndown, EVM e acompanhamento;
+- `planejamento/` — documentos gerais de planejamento;
 - `riscos/` — identificação e gerenciamento de riscos;
-- `slides/` — apresentações;
-- `visao/` — Documento de Visão e documentos relacionados.
+- `slides/` — apresentações das rodadas;
+- `visao/` — Documento de Visão.
