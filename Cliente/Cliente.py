@@ -60,13 +60,15 @@ class Cliente:
         print(f"[Seeder] Peer desconectou: {peer} ({motivo})")
 
     # Salva a sessão por info_hash como chave de busca. Com caminho_arquivo, o nó já tem o arquivo e vira seeder
-    def instanciar_sessao(self, torrent, caminho_arquivo=None):
+    def instanciar_sessao(self, torrent, caminho_arquivo=None, tracker=None):
         nova_sessao = Sessao.Sessao(torrent, self.peer_id)
+        if tracker:
+            nova_sessao.tracker = tracker
         if caminho_arquivo:
             nova_sessao.carregar_arquivo(caminho_arquivo)
         self.sessoes[nova_sessao.info_hash] = nova_sessao
-        #nova_sessao.announce(self.porta, self.peer_id)
-        return nova_sessao 
+        self.announce(nova_sessao.info_hash) # Primeiro announce (event=started) já traz o swarm
+        return nova_sessao
 
     # Announce de uma sessao com o event atual dela. Retorna a resposta do Tracker
     def announce(self, info_hash):

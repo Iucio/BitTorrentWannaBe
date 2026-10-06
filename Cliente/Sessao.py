@@ -8,7 +8,7 @@ from servicos.mensagens import Bitfield, Unchoke, Interested, Request, Piece, bi
 from servicos.evento import Event
 
 class Sessao:
-    def __init__(self, torrent, peer_id, uploaded=0, downloaded=0, left=0, event="started"):
+    def __init__(self, torrent, peer_id, uploaded=0, downloaded=0, left=None, event="started"):
         self.info_hash = infhash(torrent) # Extrai o info_hash do torrent
         self.tracker = torrent["announce"] # Endereço do Tracker
         self.private = torrent["private"] # Define se o arquivo é privado ou não
@@ -16,7 +16,12 @@ class Sessao:
         self.peer_id = peer_id # Identificador do nó na rede
         self.uploaded = uploaded # Quantos bytes foram compartilhados na rede pelo nó
         self.downloaded = downloaded # Quantos bytes o nó baixou da rede
-        self.left = left # Quantos bytes faltam para baixar do arquivo espeficicado pelo info_hash
+        # Quantos bytes faltam para baixar do arquivo espeficicado pelo info_hash, começa com o arquivo todo, recalcula durante o bglh la
+        
+        if left is None:
+            self.left = torrent["info"]["length"] 
+        else:
+            self.left = left
         self.event = event
         self.qtd_pecas = math.ceil(torrent["info"]["length"] / torrent["info"]["piece length"]) # Arredonda pra cima caso seja quebrado
         self.pecas = {} # Peças que este nó já tem: indice -> bytes
@@ -41,12 +46,11 @@ class Sessao:
         self.incomplete = dados_tracker["incomplete"]
         self.event = Event.ACTIVE
         for peer in dados_tracker["peers"]:
-            self.swarm.append(peer)
+            self.swarm.append((peer["ip"], peer["port"]))
 
     def announce(self, porta, peer_id, event): # informações que ficam no Cliente
-        url = url_encode(self.info_hash, porta, peer_id, event)
-        dados_tracker = request_tracker(url) # Dicionário contendo a resposta do Tracker 
-        self._atualizar_dados_tracker(dados_tracker)
+        url = url_encode(self, porta, peer_id, event)
+        return request_tracker(url) # Dicionário contendo a resposta do Tracker
 
     # Caminho do download -> LEECHER
     def download(self):
@@ -97,4 +101,5 @@ class Sessao:
     # Envia event=stopped para o tracker, sinalizando o término da sessao
     def shutdown(self, porta, peer_id):
         print(f"[BitTorrentWannaBe] DESLIGANDO SESSAO...  {self.event}")
-        #return self.announce(self.info_hash, porta, peer_id, "stopped")
+        # avisar pro trackeer que acabou, senão só sai por timeout
+        return self.announce(porta, peer_id, Event.STOPPED)
