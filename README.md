@@ -1,70 +1,148 @@
 # BitTorrentWannaBe
 
-Sistema de compartilhamento de arquivos fragmentados em rede fechada, desenvolvido para a disciplina de Gerência de Projeto e Manutenção de Software (GPMS).
+Projeto desenvolvido para a disciplina de **Gerência de Projeto e Manutenção de Software (GPMS)**.
 
 ## Sobre o projeto
 
-O projeto propõe uma arquitetura baseada em **Tracker + Clientes (Peers)**, inspirada no modelo BitTorrent.
+O **BitTorrentWannaBe** é um sistema de compartilhamento de arquivos fragmentados em rede fechada, inspirado no funcionamento do BitTorrent.
 
-O Tracker é responsável pela coordenação da rede, controle de acesso e localização dos fragmentos, enquanto a transferência dos dados ocorre diretamente entre os clientes.
+A arquitetura é composta por:
 
-O diferencial do sistema é utilizar a fragmentação dos arquivos como uma camada adicional de proteção, evitando que um único nó da rede mantenha permanentemente uma cópia completa do arquivo.
+- **Tracker**: registra peers e informa quais clientes possuem determinado arquivo;
+- **Clientes/Peers**: realizam a transferência direta dos fragmentos entre si.
 
-## Funcionalidades principais
+A comunicação Cliente–Tracker utiliza HTTP, enquanto a comunicação entre peers ocorre via TCP.
 
-- Parser Bencode
-- Comunicação entre Cliente e Tracker
-- Comunicação Peer-to-Peer via TCP
-- Handshake entre peers
-- Mensagens BITFIELD, HAVE, INTERESTED, UNCHOKE, REQUEST e PIECE
-- Download de fragmentos
-- Verificação de integridade
-- Reconstrução do arquivo
-- Upload e distribuição de arquivos
-- Controle básico de acesso à rede
+---
+
+## Estado da Rodada 2
+
+Na Rodada 2 foi entregue um MVP funcional com:
+
+- comunicação Cliente–Tracker;
+- registro de peers por `info_hash`;
+- persistência no Tracker com SQLite;
+- comunicação Peer-to-Peer via TCP;
+- handshake entre peers;
+- mensagens BITFIELD, INTERESTED, UNCHOKE, REQUEST e PIECE;
+- upload e download de fragmentos;
+- validação de integridade das peças;
+- escrita do arquivo em disco;
+- funcionamento de Seeder e Leecher;
+- testes de Bencode, Tracker e mensagens P2P.
+
+### Pendente
+
+- cadastro e autorização de clientes na rede.
+
+---
 
 ## Estrutura do repositório
 
 ```text
 BitTorrentWannaBe/
+├── Arquivo demo/
+├── Cliente/
+├── Tracker/
 ├── documentos/
-│   ├── configuracao/
+│   ├── configuraçao/
 │   ├── cronograma/
 │   ├── eap/
 │   ├── monitoramento/
 │   ├── planejamento/
 │   ├── riscos/
-│   ├── slides/
 │   └── visao/
 ├── README.md
 ├── LICENSE
 └── .gitignore
 ```
 
-## Tecnologias previstas
+---
+
+## Tecnologias
+
+### Cliente
 - Python
 - TCP Sockets
 - HTTP
 - Bencode
 - SHA-1
-- Biblioteca `struct`
+- Threads
 
-## Documentação
+### Tracker
+- C++
+- SQLite
+- HTTP
+- TCP Sockets
+- CMake
 
-Os artefatos produzidos ao longo da disciplina são mantidos na pasta documentos/, incluindo:
+### Gerência do projeto
+- Git
+- GitHub
+- GitHub Issues
+- GitHub Milestones
+- Pull Requests
 
-- Documento de Visão
-- Plano de Projeto
-- EAP
-- Cronograma
-- Análise de riscos
-- Monitoramento e controle
-- Slides das rodadas
-- Documentação de gerência de configuração
+---
 
-## Disciplina
+## Gerência de Configuração
 
- Projeto desenvolvido para a disciplina GPMS — Gerência de Projeto e Manutenção de Software.
+O projeto utiliza duas branches principais:
+
+- `main`: versão estável e entregável;
+- `develop`: desenvolvimento e integração das alterações.
+
+Fluxo principal:
+
+```text
+develop → Pull Request → main
+```
+
+As modificações são acompanhadas por meio de **Issues**, **Milestones** e **Pull Requests**, mantendo o histórico das atividades e das integrações realizadas.
+
+---
+
+## Documentação da Rodada 2
+
+Os principais artefatos estão disponíveis em `documentos/`:
+
+- `documentos/monitoramento/burndown2.pdf`
+- `documentos/monitoramento/evm2.pdf`
+- `documentos/cronograma/cronograma2.pdf`
+- `documentos/riscos/riscos2.pdf`
+- `documentos/eap/eap2.pdf`
+- `documentos/planejamento/PLANO_DE_PROJETO_BITTORRENT2.docx.pdf`
+- `documentos/configuraçao/gerencia-de-configuracao.md`
+
+---
+
+## Fluxo demonstrado
+
+```text
+Seeder
+  |
+  | announce
+  v
+Tracker
+  |
+  | lista de peers
+  v
+Leecher
+  |
+  | TCP + handshake
+  v
+Seeder
+  |
+  | BITFIELD
+  | INTERESTED
+  | UNCHOKE
+  | REQUEST
+  | PIECE
+  v
+Download + validação + gravação em disco
+```
+
+---
 
 ## Licença
 
