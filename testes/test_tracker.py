@@ -1,78 +1,104 @@
-import unittest
-import sys
-import os
+import threading, time, math, progressbar
+from servicos.info_hash import infhash
+from servicos.url_encoder import url_encode
+from servicos.request import request_tracker
+from GerenciadorDownload import GerenciadorDownload
+from servicos.p2p import fragmentar_arquivo
+from servicos.mensagens import Bitfield, Unchoke, Interested, Request, Piece, bitfield_de_pecas, ler_mensagem
+from servicos.evento import Event
 
-sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+class Sessao:
+    def __init__(self, torrent, peer_id, uploaded=0, downloaded=0, left=0, event="started"):
+        self.info_hash = infhash(torrent) # Extrai o info_hash do torrent
+        self.tracker = torrent["announce"] # Endereço do Tracker
+        self.private = torrent["private"] # Define se o arquivo é privado ou não
+        self.torrent = torrent # Dicionário do .torrent 
+        self.peer_id = peer_id # Identificador do nó na rede
+        self.uploaded = uploaded # Quantos bytes foram compartilhados na rede pelo nó
+        self.downloaded = downloaded # Quantos bytes o nó baixou da rede
+        self.left = left # Quantos bytes faltam para baixar do arquivo espeficicado pelo info_hash
+        self.event = event
+        self.qtd_pecas = math.ceil(torrent["info"]["length"] / torrent["info"]["piece length"]) # Arredonda pra cima caso seja quebrado
+        self.pecas = {} # Peças que este nó já tem: indice -> bytes
+        # Lista de peers daquele arquivo
+        self.swarm = [] # Ex: [("19.75.87.9", 8000), ("11.123.43.6", 9080)]
+        # Dados retornados pelo Tracker
+        self.interval = 0
+        self.min_interval = 0
+        self.complete = 0
+        self.incomplete = 0
 
-# Importa a funcao exata que voce me mandou
-from Cliente.servicos.url_encoder import url_encode
+    def add_peer_demo(self, peer):
+        self.swarm.append(peer)
 
-# Criamos uma Sessao falsa (Mock) apenas para injetar dados no teste
-class MockSessao:
-    def __init__(self):
-        self.tracker = "http://localhost:6969"
-        self.info_hash = b'\x12\x34\x56\x78\x9a\xbc\xde\xf0\x12\x34\x56\x78\x9a\xbc\xde\xf0\x12\x34\x56\x78'
-        self.uploaded = 0
-        self.downloaded = 0
-        self.left = 1024
-        self.private = 0
+    # Atualizar dados interos através da resposta do Tracker
+    def atualizar_dados_tracker(self, dados_tracker:dict):
+        if "failure_reason" in dados_tracker: # Tracker recusou o announce, nada muda
+            return
+        self.interval = dados_tracker["interval"]
+        self.min_interval = dados_tracker["min_interval"]
+        self.complete = dados_tracker["complete"]
+        self.incomplete = dados_tracker["incomplete"]
+        self.event = Event.ACTIVE
+        # O Tracker manda cada peer como {"peer_id", "ip", "port"}; o download usa (ip, porta)
+        for peer in dados_tracker["peers"]:
+            endereco = (peer["ip"], peer["port"])
+            if endereco not in self.swarm: # Sem repetir peers a cada announce
+                self.swarm.append(endereco)
 
-class TestTrackerCliente(unittest.TestCase):
-    
-    # 2.1.3 Testes de rejeição de cliente não autorizado
-    @unittest.skip("Aguardando a implementacao da issue 2.1.2 (Autorizacao ainda nao existe no Tracker)")
-    def test_rejeicao_cliente_nao_autorizado(self):
-        import urllib.request
-        import urllib.error
-        import urllib.parse
-        
-        TRACKER_URL = "http://localhost:6969/announce" 
-        
-        # Info_hash e peer_id com EXATAMENTE 20 bytes para passar na validacao de tamanho
-        params = {
-            "info_hash": "a" * 20, 
-            "peer_id": "b" * 20,
-            "port": 6881,
-            "uploaded": 0,
-            "downloaded": 0,
-            "left": 1000,
-            "event": "started"
-        }
-        query_string = urllib.parse.urlencode(params)
-        url = f"{TRACKER_URL}?{query_string}"
-        
-        try:
-            resposta = urllib.request.urlopen(url)
-            conteudo = resposta.read().decode('utf-8')
-            self.fail("O Tracker deveria ter recusado a conexao, mas aceitou.")
-        except urllib.error.HTTPError as e:
-            conteudo_erro = e.read().decode('utf-8')
-            # Tracker responde em JSON com a chave failure_reason
-            self.assertIn("failure_reason", conteudo_erro) 
-        except urllib.error.URLError:
-            self.fail("Servidor Tracker C++ precisa estar rodando na porta 6969 para este teste")
+    # Monta a URL com os dados desta sessão e devolve a resposta do Tracker.
+    # Quem atualiza a sessão com a resposta é o Cliente.announce
+    def announce(self, porta, peer_id, event): # informações que ficam no Cliente
+        url = url_encode(self, porta, peer_id, event)
+        return request_tracker(url) # Dicionário contendo a resposta do Tracker
 
-    # 2.2.3 Testes do announce request (Valida o modulo url_encoder.py do Cliente)
-    def test_announce_request_montagem_url(self):
-        # Prepara os dados simulados
-        sessao_falsa = MockSessao()
-        peer_id = "-PC0001-123456789012"
-        porta = 6881
-        evento = "started"
+    # Caminho do download -> LEECHER
+    def download(self):
+        gerenciador = GerenciadorDownload(self.torrent["info"], self.info_hash, self.peer_id, self.swarm)
+        gerenciador.instanciar_mini_leechers(self.swarm)
+        time.sleep(3)
+        thread_orquestador = threading.Thread(target=gerenciador.orquestrador, daemon=True)
+        thread_orquestador.start()
         
-        # Chama a funcao real do seu grupo
-        url_gerada = url_encode(sessao_falsa, porta, peer_id, evento)
-        
-        # Verifica se a string gerada comeca corretamente com o endereco do tracker
-        self.assertTrue(url_gerada.startswith("http://localhost:6969/announce?"))
-        
-        # Verifica se os parametros estao presentes na URL gerada
-        self.assertIn(f"peer_id={peer_id}", url_gerada)
-        self.assertIn(f"port={porta}", url_gerada)
-        self.assertIn("event=started", url_gerada)
-        self.assertIn("uploaded=0", url_gerada)
-        self.assertIn("left=1024", url_gerada)
-        self.assertIn("private=0", url_gerada)
+        barra = progressbar.ProgressBar(max_value=gerenciador.total_pecas)
+        while len(gerenciador.pecas_baixadas) < gerenciador.total_pecas:
+            barra.update(len(gerenciador.pecas_baixadas))
+            time.sleep(0.25)
 
-if __name__ == '__main__':
-    unittest.main()
+        barra.finish()
+        print(f"\n DOWNLOAD CONCLUÍDO COM SUCESSO!")
+        self.event = "completed"
+
+        
+    # Seeder: lê o arquivo e guarda só as peças que batem com o hash do .torrent
+    def carregar_arquivo(self, caminho):
+        info = self.torrent["info"]
+        self.pecas = fragmentar_arquivo(caminho, info["piece length"])
+        self.left = info["length"] - sum(len(peca) for peca in self.pecas.values())
+
+    # Caminho do upload -> SEEDER. O peer já mandou o handshake dele
+    def upload(self, conexao):
+        bitfield = Bitfield(bitfield_de_pecas(self.pecas, self.qtd_pecas))
+        conexao.sendall(bitfield.para_bytes()) # Avisa quais peças tem
+        while True: # Até o peer desconectar
+            mensagem = ler_mensagem(conexao)
+
+            if isinstance(mensagem, Request):
+                bloco = self._bloco(mensagem)
+                print(f"[Seeder] Mandando peca {mensagem.indice}")
+                conexao.sendall(bloco.para_bytes())
+            # Libera os pedidos
+            elif isinstance(mensagem, Interested):
+                print("[Seeder] Mandando unchoke...")
+                conexao.sendall(Unchoke().para_bytes())
+
+    # Recorta o bloco pedido. Pedido fora da peça derruba a conexão
+    def _bloco(self, pedido):
+        peca = self.pecas.get(pedido.indice)
+        self.uploaded += pedido.tamanho
+        return Piece(pedido.indice, pedido.inicio, peca[pedido.inicio:pedido.inicio + pedido.tamanho])
+
+    # Envia event=stopped para o tracker, sinalizando o término da sessao
+    def shutdown(self, porta, peer_id):
+        print(f"[BitTorrentWannaBe] DESLIGANDO SESSAO...  {self.event}")
+        #return self.announce(self.info_hash, porta, peer_id, "stopped")
