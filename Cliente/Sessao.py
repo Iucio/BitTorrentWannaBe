@@ -41,7 +41,7 @@ class Sessao:
         self.incomplete = dados_tracker["incomplete"]
         self.event = Event.ACTIVE
         for peer in dados_tracker["peers"]:
-            self.swarm.append(peer)
+            self.swarm.append((peer["ip"], peer["port"]))
 
     def announce(self, porta, peer_id, event): # informações que ficam no Cliente
         url = url_encode(self, porta, peer_id, event)
