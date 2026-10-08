@@ -17,6 +17,9 @@ add_library(tracker_core
 )
 target_include_directories(tracker_core PUBLIC src)
 target_link_libraries(tracker_core PUBLIC SQLite::SQLite3)
+if(WIN32)
+    target_link_libraries(tracker_core PUBLIC ws2_32) # Winsock: sockets do Windows
+endif()
 
 add_executable(tracker src/main.cpp)
 target_link_libraries(tracker PRIVATE tracker_core)

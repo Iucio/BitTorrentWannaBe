@@ -1,10 +1,15 @@
 #include "servidor_http.hpp"
 
+#ifdef _WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#else
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
 #include <sys/time.h>
 #include <unistd.h>
+#endif
 
 #include <chrono>
 #include <iostream>
@@ -24,10 +29,14 @@ int closesocket(SOCKET s) { return close(s); }
 constexpr int SEGUNDOS_LIMITE = 5;
 
 void limitar_espera(SOCKET cliente) {
+#ifdef _WIN32
+    DWORD tempo = SEGUNDOS_LIMITE * 1000; // no Windows o tempo é em milissegundos
+#else
     timeval tempo{};
     tempo.tv_sec = SEGUNDOS_LIMITE;
-    setsockopt(cliente, SOL_SOCKET, SO_RCVTIMEO, &tempo, sizeof tempo);
-    setsockopt(cliente, SOL_SOCKET, SO_SNDTIMEO, &tempo, sizeof tempo);
+#endif
+    setsockopt(cliente, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char*>(&tempo), sizeof tempo);
+    setsockopt(cliente, SOL_SOCKET, SO_SNDTIMEO, reinterpret_cast<const char*>(&tempo), sizeof tempo);
 }
 
 const char* texto_status(int status) {
@@ -51,7 +60,7 @@ void enviar(SOCKET cliente, const RespostaHttp& resp) {
     const std::string bytes = out.str();
     std::size_t enviado = 0;
     while (enviado < bytes.size()) {
-        auto n = send(cliente, bytes.data() + enviado, bytes.size() - enviado, 0);
+        auto n = send(cliente, bytes.data() + enviado, static_cast<int>(bytes.size() - enviado), 0);
         if (n <= 0) break;
         enviado += static_cast<std::size_t>(n);
     }
@@ -98,11 +107,17 @@ void atender(SOCKET cliente, const std::string& ip, const Handler& handler) {
 } // namespace
 
 bool servir(std::uint16_t porta, const Handler& handler) {
+#ifdef _WIN32
+    WSADATA wsa; // o Windows exige iniciar o Winsock antes de usar sockets
+    if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) return false;
+#endif
     SOCKET servidor = socket(AF_INET, SOCK_STREAM, 0);
     if (servidor == INVALID_SOCKET) return false;
 
+#ifndef _WIN32 // no Windows, SO_REUSEADDR deixaria outro programa abrir a mesma porta
     int reuse = 1;
     setsockopt(servidor, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof reuse);
+#endif
 
     sockaddr_in endereco{};
     endereco.sin_family = AF_INET;
