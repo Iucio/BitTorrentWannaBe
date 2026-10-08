@@ -56,6 +56,19 @@ cd Tracker/cpp
 g++ -std=c++17 -O2 src/*.cpp -o tracker -lsqlite3
 ```
 
+### No Windows
+
+Precisa do MinGW-w64 (`g++`), do `cmake` e do `ninja` (o MinGW da WinLibs já traz os três). Se o SQLite não estiver instalado, o CMake baixa o código oficial na primeira compilação (precisa de internet):
+
+```powershell
+cd Tracker\cpp
+cmake -S . -B build -G Ninja
+cmake --build build
+build\tracker.exe 6969
+```
+
+Na primeira execução o Windows pergunta se libera o `tracker.exe` no firewall; libere no tipo da rede em uso (privada ou pública) para outras máquinas conseguirem acessar.
+
 ## Como executar
 
 ```bash
