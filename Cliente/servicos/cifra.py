@@ -19,3 +19,11 @@ tam_nonce = 12
 
 def gerar_chave():
     return AESGCM.generate_key(bit_length=8 * tam_chave)
+
+
+def cifrar_arquivo(origem, destino, chave):
+    with open(origem, "rb") as f:
+        dados = f.read()
+    nonce = secrets.token_bytes(tam_nonce)  # cada arquivo tem chave própria, então o nonce nunca repete
+    with open(destino, "wb") as f:
+        f.write(nonce + AESGCM(chave).encrypt(nonce, dados, None))
