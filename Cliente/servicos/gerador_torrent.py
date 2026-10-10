@@ -2,7 +2,7 @@ import hashlib
 from pathlib import Path
 from servicos.parser import bencode
 
-def gerar_torrent(caminho_arquivo, url_tracker, piece_length=32):
+def gerar_torrent(caminho_arquivo, url_tracker, piece_length=32, shamir=None):
     # Lê os bytes do arquivo
     with open(caminho_arquivo, "rb") as arquivo:
         conteudo = arquivo.read()
@@ -26,6 +26,11 @@ def gerar_torrent(caminho_arquivo, url_tracker, piece_length=32):
         "pieces": hashes_conc_str # string para a biblioteca parser funcionar
     }
 
+    # Arquivo cifrado: ({"k": 2, "n": 3}) fica dentro do info pra entrar no info_hash 
+    # Ai ninguém troca sem mudar o arquivo
+    if shamir:
+        info["shamir"] = shamir
+
     torrent_dic = {
         "announce": url_tracker,
         "info": info,
@@ -39,6 +44,7 @@ def gerar_torrent(caminho_arquivo, url_tracker, piece_length=32):
        arquivo.write(bytes(torrent.encode("latin1"))) 
     return f"{caminho_arquivo}.torrent"
 
-dir = Path(__file__).parent.parent.parent
-path = dir / "Arquivo demo/spyxfamily_op.mp4"
-gerar_torrent(path, "https://exemplo.tracker.com", 131072) 
+if __name__ == "__main__": 
+    dir = Path(__file__).parent.parent.parent
+    path = dir / "Arquivo demo/spyxfamily_op.mp4"
+    gerar_torrent(path, "https://exemplo.tracker.com", 131072)
