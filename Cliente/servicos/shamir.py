@@ -1,11 +1,13 @@
-"""Algoritmo de Shamir em Python, espelhando o Shamir/shamir.cpp 
+"""
+Algoritmo de Shamir
 
 Divide um segredo S em n chaves (x, y) de forma que k delas bastam para
-reconstruí-lo, e menos de k não revelam nada. As contas são módulo p (primo).
+reconstruí-lo, e menos de k não revelam nada. As contas são módulo p.
 """
 
 import secrets
 
+P = 2**521 - 1  # primo de Mersenne, cabe o AES de 128 e 256 tranquilo
 
 def add(a, b, p):
     return (a % p + b % p) % p
@@ -53,3 +55,21 @@ def gen_keys(S, n, k, p):
         y = eval(a, x, p)
         keys.add((x, y))
     return keys
+
+
+def interpol(points, x, p):
+    ps = list(points)
+    k = len(ps)
+
+    l = [1] * k
+    for j in range(k):
+        for i in range(k):
+            if i != j:
+                n = sub(x, ps[i][0], p)
+                m = sub(ps[j][0], ps[i][0], p)
+                l[j] = mult(l[j], mult(n, inv(m, p), p), p)
+
+    L = 0
+    for j in range(k):
+        L = add(L, mult(ps[j][1], l[j], p), p)
+    return L
