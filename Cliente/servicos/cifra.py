@@ -13,6 +13,8 @@ import secrets
 
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
+from servicos.shamir import P, gen_keys, interpol
+
 tam_chave = 32  # AES-256
 tam_nonce = 12
 
@@ -37,3 +39,16 @@ def decifrar_arquivo(origem, destino, chave):
     aberto = AESGCM(chave).decrypt(nonce, cifrado, None)  # conferir a tag
     with open(destino, "wb") as f:
         f.write(aberto)
+
+
+def dividir_chave(chave, n, k):
+    """n partes (x, y) da chave; quaisquer k delas remontam."""
+    return gen_keys(int.from_bytes(chave, "big"), n, k, P)
+
+
+def juntar_chave(partes):
+    """Recusa partes erradas ou a menos. O que escapar, o GCM recusa ao decifrar."""
+    segredo = interpol(partes, 0, P)
+    if segredo.bit_length() > 8 * tam_chave:
+        raise ValueError("as partes não formam a chave (erradas ou a menos)")
+    return segredo.to_bytes(tam_chave, "big")
