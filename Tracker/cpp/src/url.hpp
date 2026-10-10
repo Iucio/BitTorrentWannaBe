@@ -16,7 +16,7 @@ std::optional<std::string> percent_decode(const std::string& s);
 std::optional<std::map<std::string, std::string>> parse_query(const std::string& query);
 
 // Monta o AnnounceRequest ou devolve a mensagem de erro.
-// O parâmetro ip da url tem prioridade sobre ip_remetente.
+// O ip divulgado é sempre o de quem conectou (ip_remetente); o parâmetro ip da url é ignorado.
 std::variant<AnnounceRequest, std::string> ler_announce(const std::string& query,
                                                         const std::string& ip_remetente);
 

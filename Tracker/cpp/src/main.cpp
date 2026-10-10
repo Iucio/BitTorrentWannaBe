@@ -1,13 +1,14 @@
 #include <cstdlib>
 #include <iostream>
+#include <memory>
 #include <string>
 
 #include "announce.hpp"
-#include "repositorio.hpp"
+#include "repositorio_sqlite.hpp"
 #include "rotas.hpp"
 #include "servidor_http.hpp"
 
-// Uso: ./tracker [porta]   (padrão 80)
+// Uso: ./tracker [porta] [banco]   (padrões: 80 e tracker.db)
 int main(int argc, char** argv) {
     int porta = argc > 1 ? std::atoi(argv[1]) : 80;
     if (porta < 1 || porta > 65535) {
@@ -15,8 +16,16 @@ int main(int argc, char** argv) {
         return 1;
     }
 
-    tracker::RepositorioMemoria repo;
-    tracker::Tracker tracker(repo);
+    const std::string caminho_banco = argc > 2 ? argv[2] : "tracker.db";
+    std::unique_ptr<tracker::RepositorioSQLite> repo;
+    try {
+        repo = std::make_unique<tracker::RepositorioSQLite>(caminho_banco);
+    } catch (const std::exception& e) {
+        std::cerr << e.what() << std::endl;
+        return 1;
+    }
+    std::cout << "[tracker] banco: " << caminho_banco << std::endl;
+    tracker::Tracker tracker(*repo);
 
     bool ok = tracker::servir(static_cast<std::uint16_t>(porta),
                               [&](const std::string& alvo, const std::string& ip) {

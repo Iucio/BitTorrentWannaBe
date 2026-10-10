@@ -1,16 +1,43 @@
 #include "servidor_http.hpp"
 
+#ifdef _WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+#else
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <unistd.h>
+#endif
 
+#include <chrono>
 #include <iostream>
 #include <sstream>
 
 namespace tracker {
 
 namespace {
+
+#ifndef _WIN32 // no Linux, dá os nomes do Windows para as coisas equivalentes
+using SOCKET = int;
+const SOCKET INVALID_SOCKET = -1;
+int closesocket(SOCKET s) { return close(s); }
+#endif
+
+// uma conexão por vez(por enquanto): cliente parado não pode segurar o servidor
+constexpr int SEGUNDOS_LIMITE = 5;
+
+void limitar_espera(SOCKET cliente) {
+#ifdef _WIN32
+    DWORD tempo = SEGUNDOS_LIMITE * 1000; // no Windows o tempo é em milissegundos
+#else
+    timeval tempo{};
+    tempo.tv_sec = SEGUNDOS_LIMITE;
+#endif
+    setsockopt(cliente, SOL_SOCKET, SO_RCVTIMEO, reinterpret_cast<const char*>(&tempo), sizeof tempo);
+    setsockopt(cliente, SOL_SOCKET, SO_SNDTIMEO, reinterpret_cast<const char*>(&tempo), sizeof tempo);
+}
 
 const char* texto_status(int status) {
     switch (status) {
@@ -22,7 +49,7 @@ const char* texto_status(int status) {
     }
 }
 
-void enviar(int cliente, const RespostaHttp& resp) {
+void enviar(SOCKET cliente, const RespostaHttp& resp) {
     const std::string corpo = resp.corpo + "\n"; // quebra no fim
     std::ostringstream out;
     out << "HTTP/1.1 " << resp.status << " " << texto_status(resp.status) << "\r\n"
@@ -33,17 +60,19 @@ void enviar(int cliente, const RespostaHttp& resp) {
     const std::string bytes = out.str();
     std::size_t enviado = 0;
     while (enviado < bytes.size()) {
-        auto n = send(cliente, bytes.data() + enviado, bytes.size() - enviado, 0);
+        auto n = send(cliente, bytes.data() + enviado, static_cast<int>(bytes.size() - enviado), 0);
         if (n <= 0) break;
         enviado += static_cast<std::size_t>(n);
     }
 }
 
 // só o cabecalho (get não tem corpo) no maximo 8 KB
-std::string ler_cabecalho(int cliente) {
+// o prazo vale pra leitura toda: mandar 1 byte por vez não segura o servidor
+std::string ler_cabecalho(SOCKET cliente) {
+    const auto prazo = std::chrono::steady_clock::now() + std::chrono::seconds(SEGUNDOS_LIMITE);
     std::string dados;
     char buf[1024];
-    while (dados.find("\r\n\r\n") == std::string::npos && dados.size() < 8192) {
+    while (dados.find("\r\n\r\n") == std::string::npos && dados.size() < 8192 && std::chrono::steady_clock::now() < prazo) {
         auto n = recv(cliente, buf, sizeof buf, 0);
         if (n <= 0) break;
         dados.append(buf, static_cast<std::size_t>(n));
@@ -51,7 +80,7 @@ std::string ler_cabecalho(int cliente) {
     return dados;
 }
 
-void atender(int cliente, const std::string& ip, const Handler& handler) {
+void atender(SOCKET cliente, const std::string& ip, const Handler& handler) {
     const std::string cabecalho = ler_cabecalho(cliente);
     std::istringstream linha(cabecalho.substr(0, cabecalho.find("\r\n")));
     std::string metodo, alvo, versao;
@@ -78,11 +107,17 @@ void atender(int cliente, const std::string& ip, const Handler& handler) {
 } // namespace
 
 bool servir(std::uint16_t porta, const Handler& handler) {
-    int servidor = socket(AF_INET, SOCK_STREAM, 0);
-    if (servidor < 0) return false;
+#ifdef _WIN32
+    WSADATA wsa; // o Windows exige iniciar o Winsock antes de usar sockets
+    if (WSAStartup(MAKEWORD(2, 2), &wsa) != 0) return false;
+#endif
+    SOCKET servidor = socket(AF_INET, SOCK_STREAM, 0);
+    if (servidor == INVALID_SOCKET) return false;
 
+#ifndef _WIN32 // no Windows, SO_REUSEADDR deixaria outro programa abrir a mesma porta
     int reuse = 1;
     setsockopt(servidor, SOL_SOCKET, SO_REUSEADDR, &reuse, sizeof reuse);
+#endif
 
     sockaddr_in endereco{};
     endereco.sin_family = AF_INET;
@@ -90,7 +125,7 @@ bool servir(std::uint16_t porta, const Handler& handler) {
     endereco.sin_port = htons(porta);
     if (bind(servidor, reinterpret_cast<sockaddr*>(&endereco), sizeof endereco) != 0 ||
         listen(servidor, 16) != 0) {
-        close(servidor);
+        closesocket(servidor);
         return false;
     }
     std::cout << "[tracker] ouvindo em 0.0.0.0:" << porta << std::endl;
@@ -98,13 +133,14 @@ bool servir(std::uint16_t porta, const Handler& handler) {
     while (true) {
         sockaddr_in remoto{};
         socklen_t tamanho = sizeof remoto;
-        int cliente = accept(servidor, reinterpret_cast<sockaddr*>(&remoto), &tamanho);
-        if (cliente < 0) continue;
+        SOCKET cliente = accept(servidor, reinterpret_cast<sockaddr*>(&remoto), &tamanho);
+        if (cliente == INVALID_SOCKET) continue;
+        limitar_espera(cliente);
 
         char ip[INET_ADDRSTRLEN] = {0};
         inet_ntop(AF_INET, &remoto.sin_addr, ip, sizeof ip);
         atender(cliente, ip, handler);
-        close(cliente);
+        closesocket(cliente);
     }
 }
 

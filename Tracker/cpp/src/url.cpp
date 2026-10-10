@@ -115,7 +115,8 @@ std::variant<AnnounceRequest, std::string> ler_announce(const std::string& query
     else if (evento == "stopped") req.evento = Evento::Stopped;
     else return std::string("event invalido");
 
-    req.ip = params.count("ip") && !params["ip"].empty() ? params["ip"] : ip_remetente;
+    // não confia no ip da url: daria pra colocar o ip de outra máquina no swarm
+    req.ip = ip_remetente;
     return req;
 }
 

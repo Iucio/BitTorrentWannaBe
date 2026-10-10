@@ -14,7 +14,7 @@ O Tracker não armazena nem transfere nenhum fragmento de arquivo: ele apenas in
 - Servidor HTTP próprio (somente `GET`)
 - Rota `/announce` (`/teste` só pra testes pequenos msm)
 - Leitura e validação dos parâmetros do announce
-- Registro de peers por `info_hash` (em memória)
+- Registro de peers por `info_hash`, persistido em SQLite (sobrevive a reinícios)
 - Tratamento dos eventos `started`, `completed` e `stopped`
 - Contagem de seeders (`complete`) e leechers (`incomplete`)
 - Respeito ao `min_interval` entre announces de rotina
@@ -29,10 +29,15 @@ O Tracker não armazena nem transfere nenhum fragmento de arquivo: ele apenas in
 - CMake
 - Sockets TCP
 - HTTP
+- SQLite 3
 
 ## Como compilar
 
-É necessário um ambiente Linux (ou WSL) com `g++` e, opcionalmente, `cmake`.
+É necessário um ambiente Linux (ou WSL) com `g++`, a biblioteca de desenvolvimento do SQLite e, opcionalmente, `cmake`:
+
+```bash
+sudo apt install g++ cmake libsqlite3-dev
+```
 
 Com CMake (recomendado, pq já define como compilr corretamente):
 
@@ -48,13 +53,26 @@ Sem CMake, direto com o `g++`:
 
 ```bash
 cd Tracker/cpp
-g++ -std=c++17 -O2 src/*.cpp -o tracker
+g++ -std=c++17 -O2 src/*.cpp -o tracker -lsqlite3
 ```
+
+### No Windows
+
+Precisa do MinGW-w64 (`g++`), do `cmake` e do `ninja` (o MinGW da WinLibs já traz os três). Se o SQLite não estiver instalado, o CMake baixa o código oficial na primeira compilação (precisa de internet):
+
+```powershell
+cd Tracker\cpp
+cmake -S . -B build -G Ninja
+cmake --build build
+build\tracker.exe 6969
+```
+
+Na primeira execução o Windows pergunta se libera o `tracker.exe` no firewall; libere no tipo da rede em uso (privada ou pública) para outras máquinas conseguirem acessar.
 
 ## Como executar
 
 ```bash
-./tracker [porta]
+./tracker [porta] [banco]
 ```
 
 A porta padrão é a `80`, contudo, portas abaixo de 1024 exigem `sudo`, então para testes locais é mais prático usar outra:
@@ -64,9 +82,12 @@ A porta padrão é a `80`, contudo, portas abaixo de 1024 exigem `sudo`, então 
 ```
 *Arbritario esse número
 
+O segundo argumento é o arquivo do banco SQLite (padrão `tracker.db`, na pasta de onde o Tracker foi executado). Se não existir, é criado com a tabela vazia. Os peers gravados continuam lá depois de reiniciar o Tracker, e os que passaram do prazo de expiração são removidos no próximo announce.
+
 Cada requisição atendida aparece no terminal:
 
 ```text
+[tracker] banco: tracker.db
 [tracker] ouvindo em 0.0.0.0:5023
 [tracker] 127.0.0.1 GET /announce -> 200
 ```
@@ -85,7 +106,7 @@ Cada requisição atendida aparece no terminal:
 | `downloaded` | não | Total de bytes baixados |
 | `event`      | não | `started`, `completed` ou `stopped`; omitido no announce de rotina |
 | `numwant`    | não | Quantidade de peers desejada (padrão 50, máximo 50) |
-| `ip`         | não | IP a ser divulgado; se omitido, usa o IP de quem conectou |
+| `ip`         | não | Ignorado: o Tracker divulga sempre o IP de quem conectou |
 
 Exemplo com `curl`:
 
@@ -138,11 +159,60 @@ Os valores padrão ficam na struct `Config`, em `src/announce.hpp`:
 | `fator_expiracao`  | 2      | Peer sem announce há `interval × fator` é removido |
 | `numwant_max`      | 50     | Máximo de peers por resposta |
 
+## Banco de dados
+
+O Tracker guarda os peers de cada swarm num banco SQLite embutido (`src/repositorio_sqlite.cpp`). O schema fica no início desse arquivo e é criado automaticamente na primeira execução:
+
+| Coluna            | Tipo    | Descrição |
+|-------------------|---------|-----------|
+| `info_hash`       | BLOB    | SHA-1 do arquivo, 20 bytes crus (chave, junto com `peer_id`) |
+| `peer_id`         | BLOB    | Identificador do cliente, 20 bytes |
+| `ip`              | TEXT    | IP divulgado aos outros peers |
+| `porta`           | INTEGER | Porta em que o peer aceita conexões |
+| `left_bytes`      | INTEGER | Bytes que faltam (`0` = seeder); usado para `complete`/`incomplete` |
+| `ultimo_announce` | INTEGER | Unix timestamp do último announce; usado no `min_interval` e na expiração |
+| `uploaded`        | INTEGER | Bytes enviados pelo peer na sessão atual, como ele informa no announce |
+| `downloaded`      | INTEGER | Bytes baixados pelo peer na sessão atual, como ele informa no announce |
+
+A chave primária é `(info_hash, peer_id)`: um arquivo tem vários peers e um peer pode estar em vários arquivos. Como `info_hash` é a primeira coluna da chave, as buscas por arquivo já usam esse índice. `complete` e `incomplete` são calculados a cada announce, não gravados.
+
+A versão do schema fica gravada no próprio arquivo (`PRAGMA user_version`, hoje `2`). Um `tracker.db` criado pela versão anterior, sem `uploaded`/`downloaded`, é atualizado automaticamente ao abrir o Tracker: os peers já gravados são mantidos e as colunas novas começam em zero.
+
+Para inspecionar o banco (precisa do pacote `sqlite3`):
+
+```bash
+sqlite3 tracker.db "SELECT hex(info_hash), CAST(peer_id AS TEXT), ip, porta, left_bytes, datetime(ultimo_announce, 'unixepoch') FROM peers;"
+```
+
+### Ranking dos peers ativos
+
+`uploaded` e `downloaded` permitem ver quem está compartilhando mais **entre os peers ativos no momento**. Como um peer aparece uma vez por arquivo, a consulta soma as linhas de cada `peer_id`:
+
+```bash
+sqlite3 tracker.db "SELECT CAST(peer_id AS TEXT) AS peer, SUM(uploaded) AS enviou, SUM(downloaded) AS baixou FROM peers GROUP BY peer_id ORDER BY enviou DESC;"
+```
+
+É uma visão de curto prazo, não um histórico:
+
+- os valores são os totais da sessão atual do cliente e voltam a zero quando ele reinicia;
+- um peer que sai com `event=stopped` é removido na hora e deixa de aparecer; um que cai sem avisar aparece até expirar;
+- o `peer_id` é gerado a cada execução do cliente, então a mesma pessoa aparece como peers diferentes se reabrir o programa;
+- os números são informados pelo próprio cliente, e o Tracker não tem como conferi-los.
+
+## Testes
+
+```bash
+cd Tracker/cpp/build
+ctest --output-on-failure    # ou ./teste_repositorio
+```
+
+Os testes rodam a mesma bateria no repositório em memória e no SQLite (inclui `info_hash` com byte nulo, gravação de `uploaded`/`downloaded`, contagem de seeders/leechers, `min_interval`, expiração, persistência depois de fechar o banco e migração de um banco da versão anterior).
+
 ## Limitações conhecidas
 
 Esta é uma primeira versão. Pontos ainda em aberto:
 
-- O servidor atende uma conexão por vez
+- O servidor atende uma conexão por vez (cada uma tem até 5 s para enviar o pedido)
 - Ainda não há controle de acesso: qualquer cliente pode anunciar ou remover peers
 - A rota `/teste` é provisória e responde igual à `/announce`
 
