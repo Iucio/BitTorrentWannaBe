@@ -27,3 +27,13 @@ def cifrar_arquivo(origem, destino, chave):
     nonce = secrets.token_bytes(tam_nonce)  # cada arquivo tem chave própria, então o nonce nunca repete
     with open(destino, "wb") as f:
         f.write(nonce + AESGCM(chave).encrypt(nonce, dados, None))
+
+
+def decifrar_arquivo(origem, destino, chave):
+    """Levanta exceção se a chave ou o arquivo estiverem errados."""
+    with open(origem, "rb") as f:
+        dados = f.read()
+    nonce, cifrado = dados[:tam_nonce], dados[tam_nonce:]
+    aberto = AESGCM(chave).decrypt(nonce, cifrado, None)  # conferir a tag
+    with open(destino, "wb") as f:
+        f.write(aberto)
