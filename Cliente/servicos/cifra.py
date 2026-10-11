@@ -52,3 +52,17 @@ def juntar_chave(partes):
     if segredo.bit_length() > 8 * tam_chave:
         raise ValueError("as partes não formam a chave (erradas ou a menos)")
     return segredo.to_bytes(tam_chave, "big")
+
+
+# Parte em arquivo do uploader q envia dps pra cada peer
+# hexadecimal, padrão da criptografia
+def salvar_parte(parte, caminho):
+    x, y = parte
+    with open(caminho, "w") as f:
+        f.write(f"{x:x} {y:x}\n")
+
+# Le e passa de volta para int
+def ler_parte(caminho):
+    with open(caminho) as f:
+        x, y = f.read().split()
+    return int(x, 16), int(y, 16)
