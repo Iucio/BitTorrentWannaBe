@@ -225,3 +225,8 @@ tracker.db
 # Arquivos de exemplo gerados pelo main.py e pelos testes do Cliente
 Cliente/exemplo.txt
 Cliente/exemplo.txt.torrent
+
+# Gerados pelo cifrar.py (as chaves geradas)
+*.cifrado
+*.cifrado.torrent
+Cliente/partes/
