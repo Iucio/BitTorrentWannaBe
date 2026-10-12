@@ -230,3 +230,6 @@ Cliente/exemplo.txt.torrent
 *.cifrado
 *.cifrado.torrent
 Cliente/partes/
+
+# Gerado pelo decifrar.py (o arquivo já aberto)
+Cliente/baixados/
