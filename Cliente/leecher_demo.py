@@ -20,7 +20,10 @@ spyxfamily = ler_torrent(path_torrent)
 # Faz o announce e recebe os peers do Tracker
 sessao = cliente.instanciar_sessao(spyxfamily, tracker=tracker) 
 
-sessao.download()
+if sessao.download():
+    print(f"[Leecher] left={sessao.left} downloaded={sessao.downloaded}")
+else:
+    print("[Leecher] download não completou (peers bloqueando ou fora do ar)")
 
 # Desligamento da aplicação
 # Envia announces contendo o campo event=stopped para cada sessao (info_hash) 
