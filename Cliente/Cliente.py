@@ -10,7 +10,8 @@ class Cliente:
         self.host, self.porta = self.server.getsockname()
         self.sessoes = {}
         self._interface()
-        print(f"[BitTorrentWannaBe] Esperando peers na porta {self.porta}\n")
+        print(f"[BitTorrentWannaBe] Esperando peers na porta {self.porta}")
+        print(f"[BitTorrentWannaBe] peer_id: {self.peer_id.decode('latin1')}\n")
         t.Thread(target=self._aceitar_peers, daemon=True).start() # Atende outros peers em segundo plano
 
     # Método privado da classe
@@ -45,10 +46,10 @@ class Cliente:
         try:
                 handshake = ler_handshake(conexao)
                 if handshake:
-                    print("[Seeder] Handshake recebido")
+                    print(f"[Seeder] Handshake recebido de {handshake.peer_id.decode('latin1')}")
                 sessao = self.sessoes.get(handshake.info_hash)
                 if sessao:
-                    sessao.upload(conexao)
+                    sessao.upload(conexao, handshake.peer_id)
                 else:
                     motivo = "[Seeder] pediu um arquivo que este cliente não tem"
         except ErroProtocolo as erro: # Peer mandou algo fora do protocolo
@@ -66,6 +67,8 @@ class Cliente:
             nova_sessao.tracker = tracker
         if caminho_arquivo:
             nova_sessao.carregar_arquivo(caminho_arquivo)
+        # Quando o download acabar, avisa o Tracker (event=completed, left=0, downloaded=tamanho do arquivo)
+        nova_sessao.ao_completar = lambda info_hash=nova_sessao.info_hash: self.announce(info_hash)
         self.sessoes[nova_sessao.info_hash] = nova_sessao
         self.announce(nova_sessao.info_hash) # Primeiro announce (event=started) já traz o swarm
         return nova_sessao
@@ -76,6 +79,20 @@ class Cliente:
         resposta = sessao.announce(self.porta, self.peer_id, sessao.event)
         sessao.atualizar_dados_tracker(resposta)
         return resposta
+
+    # Lockdown: este cliente (seeder) passa a negar upload (CHOKE) para esse peer em todos os arquivos
+    def bloquear(self, peer_id):
+        for sessao in self.sessoes.values():
+            sessao.bloquear(peer_id)
+
+    # Desfaz o lockdown (UNCHOKE)
+    def desbloquear(self, peer_id):
+        for sessao in self.sessoes.values():
+            sessao.desbloquear(peer_id)
+
+    # peer_ids (str) de quem está conectado neste cliente pedindo peças
+    def peers_conectados(self):
+        return sorted({p.decode("latin1") for sessao in self.sessoes.values() for p in sessao.peers_conectados() if p})
 
     def shutdown(self):
         print(f"\n[BitTorrentWannaBe] Desligando...")
@@ -93,4 +110,3 @@ class Cliente:
 
     def _interface(self):
         print(f"+-------------------+\n| BitTorrentWannaBe |\n+-------------------+")
-             
