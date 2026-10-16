@@ -167,6 +167,44 @@ static void testar_migracao() {
     for (const char* sufixo : {"", "-wal", "-shm"}) std::remove((arquivo + sufixo).c_str());
 }
 
+// Banco da versão 2 (o tracker.db de quem já usava o Tracker antes do cadastro de
+// clientes): os peers ficam, e a tabela clientes é criada.
+static void testar_migracao_v2() {
+    const std::string arquivo = "teste_migracao_v2.db";
+    for (const char* sufixo : {"", "-wal", "-shm"}) std::remove((arquivo + sufixo).c_str());
+    sqlite3* db = nullptr;
+    sqlite3_open(arquivo.c_str(), &db);
+    sqlite3_exec(db,
+                 "CREATE TABLE peers (info_hash BLOB NOT NULL, peer_id BLOB NOT NULL,"
+                 " ip TEXT NOT NULL, porta INTEGER NOT NULL, left_bytes INTEGER NOT NULL,"
+                 " ultimo_announce INTEGER NOT NULL, uploaded INTEGER NOT NULL DEFAULT 0,"
+                 " downloaded INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (info_hash, peer_id)) WITHOUT ROWID;"
+                 "INSERT INTO peers VALUES (zeroblob(20), CAST('-UF0001-versao200000' AS BLOB), '10.0.0.9', 6881, 0, 99, 5, 6);"
+                 "PRAGMA user_version = 2;",
+                 nullptr, nullptr, nullptr);
+    sqlite3_close(db);
+
+    {
+        RepositorioSQLite repo(arquivo);
+        auto p = repo.buscar_peer(std::string(20, '\0'), "-UF0001-versao200000");
+        VERIFICA(p && p->ultimo_announce == 99 && p->uploaded == 5 && p->downloaded == 6);
+    }
+
+    // confere direto no arquivo: subiu para a versão 3 e a tabela clientes existe
+    sqlite3_open(arquivo.c_str(), &db);
+    sqlite3_stmt* st = nullptr;
+    sqlite3_prepare_v2(db,
+                       "SELECT (SELECT user_version FROM pragma_user_version),"
+                       " (SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'clientes');",
+                       -1, &st, nullptr);
+    VERIFICA(sqlite3_step(st) == SQLITE_ROW);
+    VERIFICA(sqlite3_column_int(st, 0) == 3);
+    VERIFICA(sqlite3_column_int(st, 1) == 1);
+    sqlite3_finalize(st);
+    sqlite3_close(db);
+    for (const char* sufixo : {"", "-wal", "-shm"}) std::remove((arquivo + sufixo).c_str());
+}
+
 static void rodar(const char* nome, const std::function<void()>& teste) {
     const int antes = falhas;
     teste();
@@ -179,7 +217,8 @@ int main() {
     rodar("memoria: announce", [] { RepositorioMemoria r; testar_tracker(r); });
     rodar("sqlite: announce", [] { RepositorioSQLite r(":memory:"); testar_tracker(r); });
     rodar("sqlite: persiste depois de fechar", testar_persistencia);
-    rodar("sqlite: migra banco da versao anterior", testar_migracao);
+    rodar("sqlite: migra banco da versao 1", testar_migracao);
+    rodar("sqlite: migra banco da versao 2", testar_migracao_v2);
 
     std::cout << (falhas ? "\nFALHOU\n" : "\ntodos os testes passaram\n");
     return falhas ? 1 : 0;
