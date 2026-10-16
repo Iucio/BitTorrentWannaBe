@@ -14,7 +14,12 @@ namespace {
 // buscas por info_hash, que é a primeira coluna dela.
 // uploaded/downloaded: totais da sessão atual do cliente, como ele informa no
 // announce (voltam a zero quando o cliente reinicia).
-const int VERSAO_SCHEMA = 2;
+//
+// Tabela de clientes cadastrados pelo admin. Revogar só marca ativo = 0, o
+// cadastro continua no banco. O UNIQUE da chave já cria o índice da busca por ela.
+// A chave fica em texto. Se der tempo: guardar só o SHA-256 dela, para um
+// tracker.db vazado não entregar a chave de todo mundo.
+const int VERSAO_SCHEMA = 3;
 const char* const SCHEMA = R"sql(
 CREATE TABLE IF NOT EXISTS peers (
     info_hash       BLOB    NOT NULL CHECK (length(info_hash) = 20),
@@ -29,6 +34,14 @@ CREATE TABLE IF NOT EXISTS peers (
 ) WITHOUT ROWID;
 
 CREATE INDEX IF NOT EXISTS idx_peers_expiracao ON peers (ultimo_announce);
+
+CREATE TABLE IF NOT EXISTS clientes (
+    id        INTEGER PRIMARY KEY,
+    nome      TEXT    NOT NULL CHECK (length(nome) > 0),
+    chave     TEXT    NOT NULL UNIQUE,
+    ativo     INTEGER NOT NULL DEFAULT 1 CHECK (ativo IN (0, 1)), -- 0 = revogado
+    criado_em INTEGER NOT NULL                                    -- unix timestamp (s)
+);
 )sql";
 
 // Banco criado pela versão 1 (sem uploaded/downloaded): acrescenta as colunas.
@@ -175,7 +188,8 @@ void RepositorioSQLite::remover_expirados(Segundos limite) {
 }
 
 // user_version fica gravado no próprio arquivo do banco e diz qual versão do
-// schema ele tem: 0 = banco novo, 1 = sem uploaded/downloaded, 2 = atual.
+// schema ele tem: 0 = banco novo, 1 = sem uploaded/downloaded, 2 = sem a tabela
+// clientes, 3 = atual.
 void RepositorioSQLite::criar_ou_migrar_schema() {
     int versao = 0;
     sqlite3_stmt* st = preparar("PRAGMA user_version;");
@@ -187,7 +201,9 @@ void RepositorioSQLite::criar_ou_migrar_schema() {
 
     executar("BEGIN;");
     try {
-        executar(SCHEMA); // banco novo: cria a tabela já com todas as colunas
+        // banco novo: cria as tabelas já com todas as colunas. Da 2 para a 3 não
+        // precisa de script: o CREATE TABLE IF NOT EXISTS cria a clientes que falta
+        executar(SCHEMA);
         if (versao == 1) executar(MIGRACAO_V1_PARA_V2);
         executar(("PRAGMA user_version = " + std::to_string(VERSAO_SCHEMA) + ";").c_str());
         executar("COMMIT;");
