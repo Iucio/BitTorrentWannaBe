@@ -45,4 +45,13 @@ struct AnnounceResponse {
     std::vector<Peer> peers;
 };
 
+// Cliente cadastrado pelo admin: precisa da chave pra entra na rede
+struct Cliente {
+    std::int64_t id = 0;
+    std::string nome;
+    std::string chave;      // chave de acesso, manda no announce
+    bool ativo = true;      // false = revogado
+    Segundos criado_em = 0; // timestamp
+};
+
 } // namespace tracker
