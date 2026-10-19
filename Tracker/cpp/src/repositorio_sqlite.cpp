@@ -142,6 +142,10 @@ RepositorioSQLite::RepositorioSQLite(const std::string& caminho) {
             "SELECT id, nome, chave, ativo, criado_em "
             "FROM clientes "
             "WHERE chave = ?1;");
+        st_listar_clientes_ = preparar(
+            "SELECT id, nome, chave, ativo, criado_em "
+            "FROM clientes "
+            "ORDER BY id;");
     } catch (...) {
         fechar(); // construtor falhou: o destrutor não roda, então libera aqui
         throw;
@@ -152,7 +156,7 @@ RepositorioSQLite::~RepositorioSQLite() { fechar(); }
 
 void RepositorioSQLite::fechar() {
     for (auto** st : {&st_buscar_, &st_salvar_, &st_remover_, &st_listar_, &st_expirados_,
-                      &st_cadastrar_, &st_buscar_cliente_}) {
+                      &st_cadastrar_, &st_buscar_cliente_, &st_listar_clientes_}) {
         sqlite3_finalize(*st);
         *st = nullptr;
     }
@@ -225,6 +229,16 @@ std::optional<Cliente> RepositorioSQLite::buscar_cliente(const std::string& chav
     if (rc == SQLITE_ROW) return ler_cliente(st_buscar_cliente_);
     if (rc != SQLITE_DONE) erro("buscar_cliente");
     return std::nullopt;
+}
+
+std::vector<Cliente> RepositorioSQLite::listar_clientes() const {
+    UsoStmt uso{st_listar_clientes_};
+    std::vector<Cliente> clientes;
+    int rc;
+    while ((rc = sqlite3_step(st_listar_clientes_)) == SQLITE_ROW)
+        clientes.push_back(ler_cliente(st_listar_clientes_));
+    if (rc != SQLITE_DONE) erro("listar_clientes");
+    return clientes;
 }
 
 // user_version fica gravado no próprio arquivo do banco e diz qual versão do

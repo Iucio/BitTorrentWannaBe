@@ -60,4 +60,6 @@ std::optional<Cliente> RepositorioMemoria::buscar_cliente(const std::string& cha
     return std::nullopt;
 }
 
+std::vector<Cliente> RepositorioMemoria::listar_clientes() const { return clientes_; }
+
 } // namespace tracker
