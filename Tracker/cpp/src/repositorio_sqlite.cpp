@@ -64,6 +64,10 @@ void ligar_blob(sqlite3_stmt* st, int i, const std::string& bytes) {
     sqlite3_bind_blob(st, i, bytes.data(), static_cast<int>(bytes.size()), SQLITE_TRANSIENT);
 }
 
+void ligar_texto(sqlite3_stmt* st, int i, const std::string& texto) {
+    sqlite3_bind_text(st, i, texto.data(), static_cast<int>(texto.size()), SQLITE_TRANSIENT);
+}
+
 std::string ler_blob(sqlite3_stmt* st, int col) {
     const auto* dados = static_cast<const char*>(sqlite3_column_blob(st, col));
     return dados ? std::string(dados, static_cast<std::size_t>(sqlite3_column_bytes(st, col)))
@@ -122,6 +126,7 @@ RepositorioSQLite::RepositorioSQLite(const std::string& caminho) {
             "FROM peers "
             "WHERE info_hash = ?1;");
         st_expirados_ = preparar("DELETE FROM peers WHERE ultimo_announce < ?1;");
+        st_cadastrar_ = preparar("INSERT INTO clientes (nome, chave, criado_em) VALUES (?1, ?2, ?3);");
     } catch (...) {
         fechar(); // construtor falhou: o destrutor não roda, então libera aqui
         throw;
@@ -131,7 +136,8 @@ RepositorioSQLite::RepositorioSQLite(const std::string& caminho) {
 RepositorioSQLite::~RepositorioSQLite() { fechar(); }
 
 void RepositorioSQLite::fechar() {
-    for (auto** st : {&st_buscar_, &st_salvar_, &st_remover_, &st_listar_, &st_expirados_}) {
+    for (auto** st : {&st_buscar_, &st_salvar_, &st_remover_, &st_listar_, &st_expirados_,
+                      &st_cadastrar_}) {
         sqlite3_finalize(*st);
         *st = nullptr;
     }
@@ -185,6 +191,16 @@ void RepositorioSQLite::remover_expirados(Segundos limite) {
     UsoStmt uso{st_expirados_};
     sqlite3_bind_int64(st_expirados_, 1, limite);
     if (sqlite3_step(st_expirados_) != SQLITE_DONE) erro("remover_expirados");
+}
+
+std::int64_t RepositorioSQLite::cadastrar_cliente(const std::string& nome, const std::string& chave,
+                                                  Segundos criado_em) {
+    UsoStmt uso{st_cadastrar_};
+    ligar_texto(st_cadastrar_, 1, nome);
+    ligar_texto(st_cadastrar_, 2, chave);
+    sqlite3_bind_int64(st_cadastrar_, 3, criado_em);
+    if (sqlite3_step(st_cadastrar_) != SQLITE_DONE) erro("cadastrar_cliente");
+    return sqlite3_last_insert_rowid(db_);
 }
 
 // user_version fica gravado no próprio arquivo do banco e diz qual versão do

@@ -42,4 +42,15 @@ void RepositorioMemoria::remover_expirados(Segundos limite) {
     }
 }
 
+std::int64_t RepositorioMemoria::cadastrar_cliente(const std::string& nome, const std::string& chave,
+                                                   Segundos criado_em) {
+    Cliente c;
+    c.id = static_cast<std::int64_t>(clientes_.size()) + 1;
+    c.nome = nome;
+    c.chave = chave;
+    c.criado_em = criado_em;
+    clientes_.push_back(c);
+    return c.id;
+}
+
 } // namespace tracker

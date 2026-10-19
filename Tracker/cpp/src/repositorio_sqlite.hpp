@@ -27,6 +27,9 @@ public:
     std::vector<Peer> listar_peers(const std::string& info_hash) const override;
     void remover_expirados(Segundos limite) override;
 
+    std::int64_t cadastrar_cliente(const std::string& nome, const std::string& chave,
+                                   Segundos criado_em) override;
+
 private:
     void fechar();
     void criar_ou_migrar_schema();
@@ -41,6 +44,7 @@ private:
     sqlite3_stmt* st_remover_ = nullptr;
     sqlite3_stmt* st_listar_ = nullptr;
     sqlite3_stmt* st_expirados_ = nullptr;
+    sqlite3_stmt* st_cadastrar_ = nullptr;
 };
 
 } // namespace tracker
