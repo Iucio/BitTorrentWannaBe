@@ -29,6 +29,7 @@ public:
 
     std::int64_t cadastrar_cliente(const std::string& nome, const std::string& chave,
                                    Segundos criado_em) override;
+    std::optional<Cliente> buscar_cliente(const std::string& chave) const override;
 
 private:
     void fechar();
@@ -45,6 +46,7 @@ private:
     sqlite3_stmt* st_listar_ = nullptr;
     sqlite3_stmt* st_expirados_ = nullptr;
     sqlite3_stmt* st_cadastrar_ = nullptr;
+    sqlite3_stmt* st_buscar_cliente_ = nullptr;
 };
 
 } // namespace tracker

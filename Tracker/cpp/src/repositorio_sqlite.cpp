@@ -93,6 +93,17 @@ Peer ler_peer(sqlite3_stmt* st) {
     return p;
 }
 
+// colunas na ordem: id, nome, chave, ativo, criado_em
+Cliente ler_cliente(sqlite3_stmt* st) {
+    Cliente c;
+    c.id = sqlite3_column_int64(st, 0);
+    c.nome = ler_texto(st, 1);
+    c.chave = ler_texto(st, 2);
+    c.ativo = sqlite3_column_int(st, 3) != 0;
+    c.criado_em = sqlite3_column_int64(st, 4);
+    return c;
+}
+
 } // namespace
 
 RepositorioSQLite::RepositorioSQLite(const std::string& caminho) {
@@ -127,6 +138,10 @@ RepositorioSQLite::RepositorioSQLite(const std::string& caminho) {
             "WHERE info_hash = ?1;");
         st_expirados_ = preparar("DELETE FROM peers WHERE ultimo_announce < ?1;");
         st_cadastrar_ = preparar("INSERT INTO clientes (nome, chave, criado_em) VALUES (?1, ?2, ?3);");
+        st_buscar_cliente_ = preparar(
+            "SELECT id, nome, chave, ativo, criado_em "
+            "FROM clientes "
+            "WHERE chave = ?1;");
     } catch (...) {
         fechar(); // construtor falhou: o destrutor não roda, então libera aqui
         throw;
@@ -137,7 +152,7 @@ RepositorioSQLite::~RepositorioSQLite() { fechar(); }
 
 void RepositorioSQLite::fechar() {
     for (auto** st : {&st_buscar_, &st_salvar_, &st_remover_, &st_listar_, &st_expirados_,
-                      &st_cadastrar_}) {
+                      &st_cadastrar_, &st_buscar_cliente_}) {
         sqlite3_finalize(*st);
         *st = nullptr;
     }
@@ -201,6 +216,15 @@ std::int64_t RepositorioSQLite::cadastrar_cliente(const std::string& nome, const
     sqlite3_bind_int64(st_cadastrar_, 3, criado_em);
     if (sqlite3_step(st_cadastrar_) != SQLITE_DONE) erro("cadastrar_cliente");
     return sqlite3_last_insert_rowid(db_);
+}
+
+std::optional<Cliente> RepositorioSQLite::buscar_cliente(const std::string& chave) const {
+    UsoStmt uso{st_buscar_cliente_};
+    ligar_texto(st_buscar_cliente_, 1, chave);
+    const int rc = sqlite3_step(st_buscar_cliente_);
+    if (rc == SQLITE_ROW) return ler_cliente(st_buscar_cliente_);
+    if (rc != SQLITE_DONE) erro("buscar_cliente");
+    return std::nullopt;
 }
 
 // user_version fica gravado no próprio arquivo do banco e diz qual versão do

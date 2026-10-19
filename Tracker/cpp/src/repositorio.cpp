@@ -53,4 +53,11 @@ std::int64_t RepositorioMemoria::cadastrar_cliente(const std::string& nome, cons
     return c.id;
 }
 
+std::optional<Cliente> RepositorioMemoria::buscar_cliente(const std::string& chave) const {
+    for (const auto& c : clientes_) {
+        if (c.chave == chave) return c;
+    }
+    return std::nullopt;
+}
+
 } // namespace tracker

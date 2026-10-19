@@ -26,6 +26,7 @@ public:
     // Clientes cadastrados pelo admin
     virtual std::int64_t cadastrar_cliente(const std::string& nome, const std::string& chave,
                                            Segundos criado_em) = 0; // devolve o id
+    virtual std::optional<Cliente> buscar_cliente(const std::string& chave) const = 0;
 };
 
 class RepositorioMemoria : public Repositorio {
@@ -39,6 +40,7 @@ public:
 
     std::int64_t cadastrar_cliente(const std::string& nome, const std::string& chave,
                                    Segundos criado_em) override;
+    std::optional<Cliente> buscar_cliente(const std::string& chave) const override;
 
 private:
     std::map<std::string, std::map<std::string, Peer>> swarms_; // info_hash -> peer_id -> Peer
