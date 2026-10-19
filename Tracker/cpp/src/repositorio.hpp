@@ -28,6 +28,7 @@ public:
                                            Segundos criado_em) = 0; // devolve o id
     virtual std::optional<Cliente> buscar_cliente(const std::string& chave) const = 0;
     virtual std::vector<Cliente> listar_clientes() const = 0; // em ordem de id
+    virtual bool revogar_cliente(std::int64_t id) = 0;        // false se o id não existe
 };
 
 class RepositorioMemoria : public Repositorio {
@@ -43,6 +44,7 @@ public:
                                    Segundos criado_em) override;
     std::optional<Cliente> buscar_cliente(const std::string& chave) const override;
     std::vector<Cliente> listar_clientes() const override;
+    bool revogar_cliente(std::int64_t id) override;
 
 private:
     std::map<std::string, std::map<std::string, Peer>> swarms_; // info_hash -> peer_id -> Peer

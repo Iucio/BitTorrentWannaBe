@@ -62,4 +62,10 @@ std::optional<Cliente> RepositorioMemoria::buscar_cliente(const std::string& cha
 
 std::vector<Cliente> RepositorioMemoria::listar_clientes() const { return clientes_; }
 
+bool RepositorioMemoria::revogar_cliente(std::int64_t id) {
+    if (id < 1 || id > static_cast<std::int64_t>(clientes_.size())) return false;
+    clientes_[static_cast<std::size_t>(id - 1)].ativo = false;
+    return true;
+}
+
 } // namespace tracker

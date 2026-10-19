@@ -146,6 +146,7 @@ RepositorioSQLite::RepositorioSQLite(const std::string& caminho) {
             "SELECT id, nome, chave, ativo, criado_em "
             "FROM clientes "
             "ORDER BY id;");
+        st_revogar_ = preparar("UPDATE clientes SET ativo = 0 WHERE id = ?1;");
     } catch (...) {
         fechar(); // construtor falhou: o destrutor não roda, então libera aqui
         throw;
@@ -156,7 +157,7 @@ RepositorioSQLite::~RepositorioSQLite() { fechar(); }
 
 void RepositorioSQLite::fechar() {
     for (auto** st : {&st_buscar_, &st_salvar_, &st_remover_, &st_listar_, &st_expirados_,
-                      &st_cadastrar_, &st_buscar_cliente_, &st_listar_clientes_}) {
+                      &st_cadastrar_, &st_buscar_cliente_, &st_listar_clientes_, &st_revogar_}) {
         sqlite3_finalize(*st);
         *st = nullptr;
     }
@@ -239,6 +240,13 @@ std::vector<Cliente> RepositorioSQLite::listar_clientes() const {
         clientes.push_back(ler_cliente(st_listar_clientes_));
     if (rc != SQLITE_DONE) erro("listar_clientes");
     return clientes;
+}
+
+bool RepositorioSQLite::revogar_cliente(std::int64_t id) {
+    UsoStmt uso{st_revogar_};
+    sqlite3_bind_int64(st_revogar_, 1, id);
+    if (sqlite3_step(st_revogar_) != SQLITE_DONE) erro("revogar_cliente");
+    return sqlite3_changes(db_) > 0; // nenhuma linha alterada = id não existe
 }
 
 // user_version fica gravado no próprio arquivo do banco e diz qual versão do
