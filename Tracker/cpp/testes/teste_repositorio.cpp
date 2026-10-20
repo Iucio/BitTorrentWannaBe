@@ -141,6 +141,15 @@ static void testar_clientes(Repositorio& repo) {
     VERIFICA(todos.size() == 2);
     VERIFICA(todos.size() == 2 && todos[0].id == id_a && todos[0].nome == "PC-Lab-01");
     VERIFICA(todos.size() == 2 && todos[1].id == id_b && todos[1].nome == "PC-Lab-02");
+
+    // revogar desativa só aquele cliente, e o cadastro continua lá
+    VERIFICA(repo.revogar_cliente(id_a));
+    auto a_revogado = repo.buscar_cliente("chave-do-a");
+    VERIFICA(a_revogado && !a_revogado->ativo);
+    auto b_continua = repo.buscar_cliente("chave-do-b");
+    VERIFICA(b_continua && b_continua->ativo);
+    VERIFICA(repo.listar_clientes().size() == 2);
+    VERIFICA(!repo.revogar_cliente(9999)); // id que não existe
 }
 
 static void testar_persistencia() {
