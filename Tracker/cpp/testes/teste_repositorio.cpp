@@ -167,6 +167,30 @@ static void testar_persistencia() {
     for (const char* sufixo : {"", "-wal", "-shm"}) std::remove((arquivo + sufixo).c_str());
 }
 
+// Cadastro e revogação ficam gravados no arquivo: o Tracker reinicia e os
+// clientes continuam lá
+static void testar_clientes_persistem() {
+    const std::string arquivo = "teste_clientes.db";
+    for (const char* sufixo : {"", "-wal", "-shm"}) std::remove((arquivo + sufixo).c_str());
+    std::int64_t id = 0;
+    {
+        RepositorioSQLite repo(arquivo);
+        id = repo.cadastrar_cliente("PC-Lab-03", "chave-persistente", 42);
+    }
+    {
+        RepositorioSQLite repo(arquivo); // reabre: o cliente tem que estar lá
+        auto c = repo.buscar_cliente("chave-persistente");
+        VERIFICA(c && c->id == id && c->nome == "PC-Lab-03" && c->ativo && c->criado_em == 42);
+        repo.revogar_cliente(id);
+    }
+    {
+        RepositorioSQLite repo(arquivo); // a revogação também fica gravada
+        auto c = repo.buscar_cliente("chave-persistente");
+        VERIFICA(c && !c->ativo);
+    }
+    for (const char* sufixo : {"", "-wal", "-shm"}) std::remove((arquivo + sufixo).c_str());
+}
+
 // Banco criado pela primeira versão (sem uploaded/downloaded) tem que continuar
 // funcionando: os dados antigos ficam, e as colunas novas começam em zero.
 static void testar_migracao() {
@@ -250,6 +274,7 @@ int main() {
     rodar("memoria: clientes", [] { RepositorioMemoria r; testar_clientes(r); });
     rodar("sqlite: clientes", [] { RepositorioSQLite r(":memory:"); testar_clientes(r); });
     rodar("sqlite: persiste depois de fechar", testar_persistencia);
+    rodar("sqlite: clientes persistem depois de fechar", testar_clientes_persistem);
     rodar("sqlite: migra banco da versao 1", testar_migracao);
     rodar("sqlite: migra banco da versao 2", testar_migracao_v2);
 
