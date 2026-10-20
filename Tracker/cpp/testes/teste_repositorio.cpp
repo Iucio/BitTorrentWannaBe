@@ -123,6 +123,7 @@ static void testar_tracker(Repositorio& repo) {
 
 static void testar_clientes(Repositorio& repo) {
     VERIFICA(!repo.buscar_cliente("chave-do-a"));
+    VERIFICA(repo.listar_clientes().empty());
 
     const auto id_a = repo.cadastrar_cliente("PC-Lab-01", "chave-do-a", 1000);
     const auto id_b = repo.cadastrar_cliente("PC-Lab-02", "chave-do-b", 2000);
@@ -134,6 +135,12 @@ static void testar_clientes(Repositorio& repo) {
     auto b = repo.buscar_cliente("chave-do-b");
     VERIFICA(b && b->id == id_b && b->nome == "PC-Lab-02");
     VERIFICA(!repo.buscar_cliente("chave-que-ninguem-tem"));
+
+    // listar traz todos, em ordem de id
+    const auto todos = repo.listar_clientes();
+    VERIFICA(todos.size() == 2);
+    VERIFICA(todos.size() == 2 && todos[0].id == id_a && todos[0].nome == "PC-Lab-01");
+    VERIFICA(todos.size() == 2 && todos[1].id == id_b && todos[1].nome == "PC-Lab-02");
 }
 
 static void testar_persistencia() {
