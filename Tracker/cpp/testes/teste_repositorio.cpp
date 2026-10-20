@@ -121,6 +121,21 @@ static void testar_tracker(Repositorio& repo) {
     VERIFICA(resp.complete == 0 && resp.incomplete == 1);
 }
 
+static void testar_clientes(Repositorio& repo) {
+    VERIFICA(!repo.buscar_cliente("chave-do-a"));
+
+    const auto id_a = repo.cadastrar_cliente("PC-Lab-01", "chave-do-a", 1000);
+    const auto id_b = repo.cadastrar_cliente("PC-Lab-02", "chave-do-b", 2000);
+    VERIFICA(id_a != id_b);
+
+    auto a = repo.buscar_cliente("chave-do-a");
+    VERIFICA(a && a->id == id_a && a->nome == "PC-Lab-01" && a->chave == "chave-do-a");
+    VERIFICA(a && a->ativo && a->criado_em == 1000); // cliente novo já entra ativo
+    auto b = repo.buscar_cliente("chave-do-b");
+    VERIFICA(b && b->id == id_b && b->nome == "PC-Lab-02");
+    VERIFICA(!repo.buscar_cliente("chave-que-ninguem-tem"));
+}
+
 static void testar_persistencia() {
     const std::string arquivo = "teste_persistencia.db";
     std::remove(arquivo.c_str());
@@ -216,6 +231,8 @@ int main() {
     rodar("sqlite: operacoes basicas", [] { RepositorioSQLite r(":memory:"); testar_repositorio(r); });
     rodar("memoria: announce", [] { RepositorioMemoria r; testar_tracker(r); });
     rodar("sqlite: announce", [] { RepositorioSQLite r(":memory:"); testar_tracker(r); });
+    rodar("memoria: clientes", [] { RepositorioMemoria r; testar_clientes(r); });
+    rodar("sqlite: clientes", [] { RepositorioSQLite r(":memory:"); testar_clientes(r); });
     rodar("sqlite: persiste depois de fechar", testar_persistencia);
     rodar("sqlite: migra banco da versao 1", testar_migracao);
     rodar("sqlite: migra banco da versao 2", testar_migracao_v2);
