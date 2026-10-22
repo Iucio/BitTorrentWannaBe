@@ -114,6 +114,7 @@ RepositorioSQLite::RepositorioSQLite(const std::string& caminho) {
         throw std::runtime_error("nao foi possivel abrir o banco '" + caminho + "': " + msg);
     }
     try {
+        sqlite3_busy_timeout(db_, 2000); // banco ocupado por outro processo: espera até 2 s
         // WAL + NORMAL: cada escrita não força fsync, o announce continua rápido
         executar("PRAGMA journal_mode = WAL;");
         executar("PRAGMA synchronous = NORMAL;");
@@ -261,7 +262,7 @@ void RepositorioSQLite::criar_ou_migrar_schema() {
     if (versao > VERSAO_SCHEMA)
         throw std::runtime_error("banco criado por uma versao mais nova do Tracker");
 
-    executar("BEGIN;");
+    executar("BEGIN IMMEDIATE;"); // sem o IMMEDIATE o busy_timeout não vale aqui
     try {
         // banco novo: cria as tabelas já com todas as colunas. Da 2 para a 3 não
         // precisa de script: o CREATE TABLE IF NOT EXISTS cria a clientes que falta
