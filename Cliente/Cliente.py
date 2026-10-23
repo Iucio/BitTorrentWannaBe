@@ -9,9 +9,16 @@ class Cliente:
         self.server = self._gerar_servidor()
         self.host, self.porta = self.server.getsockname()
         self.sessoes = {}
+        self.lockdown = False
         self._interface()
         print(f"[BitTorrentWannaBe] Esperando peers na porta {self.porta}\n")
         t.Thread(target=self._aceitar_peers, daemon=True).start() # Atende outros peers em segundo plano
+
+
+    def add_sessao(self, torrent):
+        nova_sessao = Sessao.Sessao(torrent, self.peer_id)
+        self.sessoes[nova_sessao.info_hash] = nova_sessao
+        return nova_sessao
 
     # Método privado da classe
     def _gerar_peer_id(self): # Ainda não sei onde que vai ficar essa função.
@@ -74,18 +81,34 @@ class Cliente:
     def announce(self, info_hash):
         sessao = self.sessoes[info_hash]
         resposta = sessao.announce(self.porta, self.peer_id, sessao.event)
+        if not resposta: # request_tracker falhou
+            self._lockdown() # Congela todas as sessões e testa o Tracker
         sessao.atualizar_dados_tracker(resposta)
-        return resposta
+
+    def _lockdown(self):
+        print(f"[BitTorrentWannaBe] Iniciando lockdown...")
+        for sessao in self.sessoes.values():
+            print(f"[BitTorrentWannaBe] congelando sessao {sessao.info_hash}")
+            sessao.lockdown(True)
+        print(f"[BitTorrentWannaBe] Lockdown completo. Testando Tracker novamente...")
+        time.sleep(10)
+        resposta = sessao.announce(self.porta, self.peer_id, sessao.event)
+        if not resposta:
+            print("[BitTorrentWannaBe] Tracker fora do ar, encerrando...")
+            self.shutdown()
+            exit(1)
+        print(f"[BitTorrentWannaBe] Tracker ativo, retomando sessões...")
+        for sessao in self.sessoes.values():
+            sessao.lockdown(False)
 
     def shutdown(self):
-        print(f"\n[BitTorrentWannaBe] Desligando...")
+        print(f"\n[BitTorrentWannaBe] Desligando cliente...")
         for sessao in self.sessoes.values():
             self.event = Event.STOPPED
         for sessao in self.sessoes.values():
             sessao.shutdown(self.porta, self.peer_id)
         self.server.close() # Libera recursos
         try:
-            print(f"\n[BitTorrentWannaBe] Desligando cliente...")
             self.server.shutdown(socket.SHUT_RDWR) # Finaliza a sessao
             self.server.close() # Libera recursos 
         except Exception as e:
