@@ -1,4 +1,6 @@
 #include <cstdlib>
+#include <ctime>
+#include <iomanip>
 #include <iostream>
 #include <memory>
 #include <string>
@@ -27,19 +29,51 @@ int cadastrar(const std::string& nome, const std::string& caminho_banco) {
     }
 }
 
+// unix timestamp -> "2026-10-23 14:05", no fuso da máquina
+std::string data(tracker::Segundos s) {
+    const std::time_t t = static_cast<std::time_t>(s);
+    char texto[32] = "?";
+    if (const std::tm* tm = std::localtime(&t)) std::strftime(texto, sizeof texto, "%Y-%m-%d %H:%M", tm);
+    return texto;
+}
+
+int listar(const std::string& caminho_banco) {
+    try {
+        tracker::RepositorioSQLite repo(caminho_banco);
+        const auto clientes = repo.listar_clientes();
+        if (clientes.empty()) {
+            std::cout << "nenhum cliente cadastrado" << std::endl;
+            return 0;
+        }
+        std::cout << "id  situacao  cadastrado em     nome\n";
+        for (const auto& c : clientes) {
+            std::cout << std::left << std::setw(4) << c.id << std::setw(10)
+                      << (c.ativo ? "ativo" : "revogado") << std::setw(18) << data(c.criado_em)
+                      << c.nome << "\n";
+        }
+        return 0;
+    } catch (const std::exception& e) {
+        std::cerr << e.what() << std::endl;
+        return 1;
+    }
+}
+
 } // namespace
 
 // Uso:
 //   ./tracker [porta] [banco]            servidor (padrões: 80 e tracker.db)
 //   ./tracker cadastrar <nome> [banco]   cadastra um cliente e mostra a chave dele
+//   ./tracker clientes [banco]           lista os clientes cadastrados
 int main(int argc, char** argv) {
-    if (argc > 1 && std::string(argv[1]) == "cadastrar") {
+    const std::string comando = argc > 1 ? argv[1] : "";
+    if (comando == "cadastrar") {
         if (argc < 3) {
             std::cerr << "uso: ./tracker cadastrar <nome> [banco]\n";
             return 1;
         }
         return cadastrar(argv[2], argc > 3 ? argv[3] : BANCO_PADRAO);
     }
+    if (comando == "clientes") return listar(argc > 2 ? argv[2] : BANCO_PADRAO);
 
     int porta = argc > 1 ? std::atoi(argv[1]) : 80;
     if (porta < 1 || porta > 65535) {
