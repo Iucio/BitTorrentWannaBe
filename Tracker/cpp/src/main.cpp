@@ -1,3 +1,4 @@
+#include <charconv>
 #include <cstdlib>
 #include <ctime>
 #include <iomanip>
@@ -58,12 +59,34 @@ int listar(const std::string& caminho_banco) {
     }
 }
 
+int revogar(const std::string& id_texto, const std::string& caminho_banco) {
+    std::int64_t id = 0;
+    const auto [fim, erro] = std::from_chars(id_texto.data(), id_texto.data() + id_texto.size(), id);
+    if (erro != std::errc{} || fim != id_texto.data() + id_texto.size()) {
+        std::cerr << "id invalido: " << id_texto << "\n";
+        return 1;
+    }
+    try {
+        tracker::RepositorioSQLite repo(caminho_banco);
+        if (!repo.revogar_cliente(id)) {
+            std::cerr << "cliente " << id << " nao existe" << std::endl;
+            return 1;
+        }
+        std::cout << "cliente " << id << " revogado" << std::endl;
+        return 0;
+    } catch (const std::exception& e) {
+        std::cerr << e.what() << std::endl;
+        return 1;
+    }
+}
+
 } // namespace
 
 // Uso:
 //   ./tracker [porta] [banco]            servidor (padrões: 80 e tracker.db)
 //   ./tracker cadastrar <nome> [banco]   cadastra um cliente e mostra a chave dele
 //   ./tracker clientes [banco]           lista os clientes cadastrados
+//   ./tracker revogar <id> [banco]       revoga a chave de um cliente
 int main(int argc, char** argv) {
     const std::string comando = argc > 1 ? argv[1] : "";
     if (comando == "cadastrar") {
@@ -74,6 +97,13 @@ int main(int argc, char** argv) {
         return cadastrar(argv[2], argc > 3 ? argv[3] : BANCO_PADRAO);
     }
     if (comando == "clientes") return listar(argc > 2 ? argv[2] : BANCO_PADRAO);
+    if (comando == "revogar") {
+        if (argc < 3) {
+            std::cerr << "uso: ./tracker revogar <id> [banco]\n";
+            return 1;
+        }
+        return revogar(argv[2], argc > 3 ? argv[3] : BANCO_PADRAO);
+    }
 
     int porta = argc > 1 ? std::atoi(argv[1]) : 80;
     if (porta < 1 || porta > 65535) {
