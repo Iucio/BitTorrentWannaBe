@@ -21,6 +21,7 @@ O Tracker não armazena nem transfere nenhum fragmento de arquivo: ele apenas in
 - Expiração de peers que pararam de enviar announce
 - Sorteio e limite (`numwant`) da lista de peers devolvida
 - Resposta em JSON
+- Cadastro de clientes com chave de acesso, listagem e revogação, pela linha de comando
 
 
 ## Tecnologias
@@ -82,7 +83,7 @@ A porta padrão é a `80`, contudo, portas abaixo de 1024 exigem `sudo`, então 
 ```
 *Arbritario esse número
 
-O segundo argumento é o arquivo do banco SQLite (padrão `tracker.db`, na pasta de onde o Tracker foi executado). Se não existir, é criado com a tabela vazia. Os peers gravados continuam lá depois de reiniciar o Tracker, e os que passaram do prazo de expiração são removidos no próximo announce.
+O segundo argumento é o arquivo do banco SQLite (padrão `tracker.db`, na pasta de onde o Tracker foi executado). Se não existir, é criado com as tabelas vazias. Os peers gravados continuam lá depois de reiniciar o Tracker, e os que passaram do prazo de expiração são removidos no próximo announce.
 
 Cada requisição atendida aparece no terminal:
 
@@ -91,6 +92,23 @@ Cada requisição atendida aparece no terminal:
 [tracker] ouvindo em 0.0.0.0:5023
 [tracker] 127.0.0.1 GET /announce -> 200
 ```
+
+### Cadastro de clientes
+
+Só quem tem acesso à máquina do Tracker cadastra clientes: não existe rota de cadastro na rede. A chave é sorteada pelo próprio Tracker (32 caracteres hexadecimais) e o admin entrega ela ao cliente.
+
+```bash
+./tracker cadastrar "PC-Lab-03" [banco]   # mostra o id e a chave
+./tracker clientes [banco]                # lista id, situação, data do cadastro e nome
+./tracker revogar 3 [banco]               # o cadastro continua, marcado como revogado
+```
+
+```text
+cliente 3 cadastrado: PC-Lab-03
+chave de acesso: 9f2c41e8a0b7d35c6e14f0a2b8c97d61
+```
+
+Os comandos usam o mesmo `tracker.db` do servidor (ou o banco passado no fim) e podem rodar com o servidor ligado.
 
 ## Rota `/announce`
 
@@ -161,7 +179,7 @@ Os valores padrão ficam na struct `Config`, em `src/announce.hpp`:
 
 ## Banco de dados
 
-O Tracker guarda os peers de cada swarm num banco SQLite embutido (`src/repositorio_sqlite.cpp`). O schema fica no início desse arquivo e é criado automaticamente na primeira execução:
+O Tracker guarda num banco SQLite embutido (`src/repositorio_sqlite.cpp`) os peers de cada swarm e os clientes cadastrados. O schema fica no início desse arquivo e é criado automaticamente na primeira execução. Tabela `peers`:
 
 | Coluna            | Tipo    | Descrição |
 |-------------------|---------|-----------|
@@ -176,7 +194,17 @@ O Tracker guarda os peers de cada swarm num banco SQLite embutido (`src/reposito
 
 A chave primária é `(info_hash, peer_id)`: um arquivo tem vários peers e um peer pode estar em vários arquivos. Como `info_hash` é a primeira coluna da chave, as buscas por arquivo já usam esse índice. `complete` e `incomplete` são calculados a cada announce, não gravados.
 
-A versão do schema fica gravada no próprio arquivo (`PRAGMA user_version`, hoje `2`). Um `tracker.db` criado pela versão anterior, sem `uploaded`/`downloaded`, é atualizado automaticamente ao abrir o Tracker: os peers já gravados são mantidos e as colunas novas começam em zero.
+A tabela `clientes` guarda quem pode entrar na rede (ver [Cadastro de clientes](#cadastro-de-clientes)):
+
+| Coluna      | Tipo    | Descrição |
+|-------------|---------|-----------|
+| `id`        | INTEGER | Número do cliente, usado no `revogar` |
+| `nome`      | TEXT    | Identificação dada no cadastro (não pode ser vazio) |
+| `chave`     | TEXT    | Chave de acesso (única) |
+| `ativo`     | INTEGER | `1` = ativo, `0` = revogado |
+| `criado_em` | INTEGER | Unix timestamp do cadastro |
+
+A versão do schema fica gravada no próprio arquivo (`PRAGMA user_version`, hoje `3`). Bancos de versões anteriores são atualizados automaticamente ao abrir o Tracker, mantendo os peers já gravados: o da versão 1 ganha `uploaded`/`downloaded` (começando em zero) e o da versão 2 ganha a tabela `clientes`. Depois de atualizado, o banco não abre num Tracker mais antigo.
 
 Para inspecionar o banco (precisa do pacote `sqlite3`):
 
@@ -206,13 +234,13 @@ cd Tracker/cpp/build
 ctest --output-on-failure    # ou ./teste_repositorio
 ```
 
-Os testes rodam a mesma bateria no repositório em memória e no SQLite (inclui `info_hash` com byte nulo, gravação de `uploaded`/`downloaded`, contagem de seeders/leechers, `min_interval`, expiração, persistência depois de fechar o banco e migração de um banco da versão anterior).
+Os testes rodam a mesma bateria no repositório em memória e no SQLite (inclui `info_hash` com byte nulo, gravação de `uploaded`/`downloaded`, contagem de seeders/leechers, `min_interval`, expiração, persistência depois de fechar o banco, cadastro, busca, listagem, revogação e persistência dos clientes, e migração dos bancos das versões 1 e 2).
 
 ## Limitações conhecidas
 
 Esta é uma primeira versão. Pontos ainda em aberto:
 
 - O servidor atende uma conexão por vez (cada uma tem até 5 s para enviar o pedido)
-- Ainda não há controle de acesso: qualquer cliente pode anunciar ou remover peers
+- O cadastro de clientes existe, mas o announce ainda não confere a chave: qualquer cliente pode anunciar ou remover peers
 - A rota `/teste` é provisória e responde igual à `/announce`
 
