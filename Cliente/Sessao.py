@@ -17,6 +17,7 @@ class Sessao:
         self.uploaded = uploaded # Quantos bytes foram compartilhados na rede pelo nó
         self.downloaded = downloaded # Quantos bytes o nó baixou da rede
         self._lockdown = False
+        self._shutdown = False
         # Quantos bytes faltam para baixar do arquivo espeficicado pelo info_hash, começa com o arquivo todo, recalcula durante o bglh la
         
         if left is None:
@@ -65,6 +66,8 @@ class Sessao:
         while len(gerenciador.pecas_baixadas) < gerenciador.total_pecas:
             barra.update(len(gerenciador.pecas_baixadas))
             time.sleep(0.25)
+            if self._shutdown:
+                exit(1)
 
         barra.finish()
         print(f"\n DOWNLOAD CONCLUÍDO COM SUCESSO!")
@@ -110,3 +113,4 @@ class Sessao:
             print(f"[BitTorrentWannaBe] DESLIGANDO SESSAO...  {self.event}")
             # avisar pro trackeer que acabou, senão só sai por timeout
             return self.announce(porta, peer_id, Event.STOPPED)
+        self._shutdown = True
