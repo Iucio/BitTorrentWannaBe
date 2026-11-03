@@ -99,6 +99,8 @@ static void testar_tracker(Repositorio& repo) {
     req.info_hash = hash_binario('C');
     req.ip = "10.0.0.1";
     req.porta = 7000;
+    repo.cadastrar_cliente("teste", "chave-teste", agora);
+    req.chave = "chave-teste";
 
     req.peer_id = "-UF0001-seeder000000";
     req.left = 0;
