@@ -22,6 +22,7 @@ struct AnnounceRequest {
     std::int64_t left = 0;
     Evento evento = Evento::Nenhum;
     int numwant = 50;
+    std::string chave;
 };
 
 struct Peer {
