@@ -11,9 +11,11 @@ from servicos.gerador_torrent import gerar_torrent
 
 # se n passar é localhost
 tracker = os.environ.get("TRACKER_URL", "http://127.0.0.1:6969")
+# Chave de acesso: ./tracker cadastrar <nome> mostra a chave
+chave = os.environ.get("TRACKER_CHAVE", "")
 
 # Início do programa
-cliente = Cliente.Cliente()
+cliente = Cliente.Cliente(chave)
 
 dir = Path(__file__).parent.parent
 path_torrent = Path(sys.argv[1]) if len(sys.argv) > 1 else dir / "Arquivo demo/spyxfamily_op.mp4.torrent"
