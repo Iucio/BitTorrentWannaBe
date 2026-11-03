@@ -22,6 +22,7 @@ O Tracker não armazena nem transfere nenhum fragmento de arquivo: ele apenas in
 - Sorteio e limite (`numwant`) da lista de peers devolvida
 - Resposta em JSON
 - Cadastro de clientes com chave de acesso, listagem e revogação, pela linha de comando
+- Só cliente cadastrado e não revogado faz announce (parâmetro `chave`)
 
 
 ## Tecnologias
@@ -110,9 +111,11 @@ chave de acesso: 9f2c41e8a0b7d35c6e14f0a2b8c97d61
 
 Os comandos usam o mesmo `tracker.db` do servidor (ou o banco passado no fim) e podem rodar com o servidor ligado.
 
+O cliente manda a chave em todo announce (parâmetro `chave`, ver [Rota `/announce`](#rota-announce)). Chave que não existe ou foi revogada é recusada com `cliente nao autorizado`, inclusive no `stopped`, então quem não está cadastrado também não tira peers da rede. Nos demos do cliente, a chave vai na variável `TRACKER_CHAVE`.
+
 ## Rota `/announce`
 
-`GET /announce?info_hash=...&peer_id=...&port=...&left=...`
+`GET /announce?info_hash=...&peer_id=...&port=...&left=...&chave=...`
 
 | Parâmetro    | Obrigatório | Descrição |
 |--------------|-------------|-----------|
@@ -120,16 +123,17 @@ Os comandos usam o mesmo `tracker.db` do servidor (ou o banco passado no fim) e 
 | `peer_id`    | sim | Identificador do cliente, 20 bytes |
 | `port`       | sim | Porta em que o cliente aceita conexões de outros peers |
 | `left`       | sim | Bytes que ainda faltam baixar (`0` = seeder) |
+| `chave`      | sim | Chave de acesso do cliente (`./tracker cadastrar`), até 64 caracteres |
 | `uploaded`   | não | Total de bytes enviados |
 | `downloaded` | não | Total de bytes baixados |
 | `event`      | não | `started`, `completed` ou `stopped`; omitido no announce de rotina |
 | `numwant`    | não | Quantidade de peers desejada (padrão 50, máximo 50) |
 | `ip`         | não | Ignorado: o Tracker divulga sempre o IP de quem conectou |
 
-Exemplo com `curl`:
+Exemplo com `curl` (a chave precisa estar cadastrada):
 
 ```bash
-curl "http://127.0.0.1:5023/announce?info_hash=%C8%C9%CA%CB%CC%CD%CE%CF%D0%D1%D2%D3%D4%D5%D6%D7%D8%D9%DA%DB&peer_id=-UF0001-abcdefghijkl&port=6881&left=0&event=started"
+curl "http://127.0.0.1:5023/announce?info_hash=%C8%C9%CA%CB%CC%CD%CE%CF%D0%D1%D2%D3%D4%D5%D6%D7%D8%D9%DA%DB&peer_id=-UF0001-abcdefghijkl&port=6881&left=0&event=started&chave=9f2c41e8a0b7d35c6e14f0a2b8c97d61"
 ```
 
 ## Resposta
@@ -161,7 +165,7 @@ Erro:
 
 | Status | Quando |
 |--------|--------|
-| `200` + `failure_reason` | Regra do tracker violada (ex.: announce antes do `min_interval`) |
+| `200` + `failure_reason` | Regra do tracker violada (ex.: `cliente nao autorizado`, announce antes do `min_interval`) |
 | `400` | Parâmetro ausente ou inválido, URL mal formada |
 | `404` | Caminho desconhecido |
 | `405` | Método diferente de `GET` |
@@ -241,6 +245,8 @@ Os testes rodam a mesma bateria no repositório em memória e no SQLite (inclui 
 Esta é uma primeira versão. Pontos ainda em aberto:
 
 - O servidor atende uma conexão por vez (cada uma tem até 5 s para enviar o pedido)
-- O cadastro de clientes existe, mas o announce ainda não confere a chave: qualquer cliente pode anunciar ou remover peers
+- Um cliente autorizado ainda consegue atualizar ou tirar da rede o peer de outro, se souber o `peer_id` dele
+- Revogar não tira da lista os peers do cliente: eles continuam aparecendo até expirar
+- A chave fica em texto no banco
 - A rota `/teste` é provisória e responde igual à `/announce`
 
