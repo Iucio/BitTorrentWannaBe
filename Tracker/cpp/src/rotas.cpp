@@ -20,10 +20,12 @@ RespostaHttp rotear(Tracker& tracker, const std::string& alvo, const std::string
     const std::string caminho = alvo.substr(0, interrogacao);
     const std::string query = interrogacao == std::string::npos ? "" : alvo.substr(interrogacao + 1);
 
-    if (caminho == "/peers") {
+    if (caminho == "/peers" || caminho == "/guardioes") {
         auto lido = ler_consulta_peers(query);
         if (auto* erro = std::get_if<std::string>(&lido)) return erro_400(*erro);
-        return {200, resposta_para_json(tracker.peers(std::get<ConsultaPeers>(lido)))};
+        const auto& consulta = std::get<ConsultaPeers>(lido);
+        if (caminho == "/peers") return {200, resposta_para_json(tracker.peers(consulta))};
+        return {200, guardioes_para_json(tracker.guardioes(consulta))};
     }
 
     // /teste pra funcionar com o outro la por enquanto, dps fazer um proprio pra testes se for o caso

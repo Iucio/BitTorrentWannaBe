@@ -125,6 +125,14 @@ std::variant<AnnounceRequest, std::string> ler_announce(const std::string& query
     req.chave = params["chave"];
     if (!chave_valida(req.chave)) return std::string("chave invalida");
 
+    // peer_ids dos guardiões colados um no outro, 20 bytes cada (como os peers compactos do BitTorrent)
+    if (params.count("guardioes")) {
+        const std::string& valor = params["guardioes"];
+        if (valor.empty() || valor.size() % 20 != 0 || valor.size() > 20 * 50)
+            return std::string("guardioes invalido");
+        for (std::size_t i = 0; i < valor.size(); i += 20) req.guardioes.push_back(valor.substr(i, 20));
+    }
+
     // não confia no ip da url: daria pra colocar o ip de outra máquina no swarm
     req.ip = ip_remetente;
     return req;

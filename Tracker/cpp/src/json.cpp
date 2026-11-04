@@ -27,6 +27,22 @@ std::string json_string(const std::string& s) {
     return out + "\"";
 }
 
+namespace {
+
+void escrever_peers(std::ostringstream& out, const std::vector<Peer>& peers) {
+    out << "[";
+    for (std::size_t i = 0; i < peers.size(); i++) {
+        const auto& p = peers[i];
+        if (i) out << ",";
+        out << "{\"peer_id\":" << json_string(p.peer_id)
+            << ",\"ip\":" << json_string(p.ip)
+            << ",\"port\":" << p.porta << "}";
+    }
+    out << "]";
+}
+
+} // namespace
+
 std::string resposta_para_json(const AnnounceResponse& resp) {
     std::ostringstream out;
     if (resp.falha) {
@@ -38,15 +54,18 @@ std::string resposta_para_json(const AnnounceResponse& resp) {
         << ",\"min_interval\":" << resp.min_interval
         << ",\"complete\":" << resp.complete
         << ",\"incomplete\":" << resp.incomplete
-        << ",\"peers\":[";
-    for (std::size_t i = 0; i < resp.peers.size(); i++) {
-        const auto& p = resp.peers[i];
-        if (i) out << ",";
-        out << "{\"peer_id\":" << json_string(p.peer_id)
-            << ",\"ip\":" << json_string(p.ip)
-            << ",\"port\":" << p.porta << "}";
-    }
-    out << "]}";
+        << ",\"peers\":";
+    escrever_peers(out, resp.peers);
+    out << "}";
+    return out.str();
+}
+
+std::string guardioes_para_json(const AnnounceResponse& resp) {
+    if (resp.falha) return resposta_para_json(resp);
+    std::ostringstream out;
+    out << "{\"guardioes\":";
+    escrever_peers(out, resp.peers);
+    out << "}";
     return out.str();
 }
 

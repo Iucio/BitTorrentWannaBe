@@ -247,7 +247,7 @@ static void testar_migracao_v2() {
         VERIFICA(p && p->ultimo_announce == 99 && p->uploaded == 5 && p->downloaded == 6);
     }
 
-    // confere direto no arquivo: subiu para a versão 3 e a tabela clientes existe
+    // confere direto no arquivo: subiu para a versão atual e a tabela clientes existe
     sqlite3_open(arquivo.c_str(), &db);
     sqlite3_stmt* st = nullptr;
     sqlite3_prepare_v2(db,
@@ -255,7 +255,7 @@ static void testar_migracao_v2() {
                        " (SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'clientes');",
                        -1, &st, nullptr);
     VERIFICA(sqlite3_step(st) == SQLITE_ROW);
-    VERIFICA(sqlite3_column_int(st, 0) == 3);
+    VERIFICA(sqlite3_column_int(st, 0) == 4);
     VERIFICA(sqlite3_column_int(st, 1) == 1);
     sqlite3_finalize(st);
     sqlite3_close(db);

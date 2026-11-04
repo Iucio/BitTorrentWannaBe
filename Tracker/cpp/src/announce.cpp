@@ -17,7 +17,8 @@ Tracker::Tracker(Repositorio& repo, Config config, std::function<Segundos()> rel
 
 AnnounceResponse Tracker::announce(const AnnounceRequest& req) {
     // só cliente cadastrado e não revogado entra na rede
-    if (!autorizado(req.chave)) return falha("cliente nao autorizado");
+    auto cliente = autorizado(req.chave);
+    if (!cliente) return falha("cliente nao autorizado");
 
     const Segundos agora = relogio_();
     repo_.remover_expirados(agora - config_.interval * config_.fator_expiracao);
@@ -40,6 +41,12 @@ AnnounceResponse Tracker::announce(const AnnounceRequest& req) {
         return falha("announce antes do min_interval");
     }
 
+    // só o cliente que escolheu os primeiros guardiões do arquivo pode escolher mais
+    if (!req.guardioes.empty()) {
+        auto dono = repo_.dono_dos_guardioes(req.info_hash);
+        if (dono && *dono != cliente->id) return falha("guardioes ja escolhidos por outro cliente");
+    }
+
     Peer peer;
     peer.peer_id = req.peer_id;
     peer.ip = req.ip;
@@ -49,6 +56,9 @@ AnnounceResponse Tracker::announce(const AnnounceRequest& req) {
     peer.left = req.left;
     peer.ultimo_announce = agora;
     repo_.salvar_peer(req.info_hash, peer);
+
+    for (const auto& guardiao : req.guardioes)
+        repo_.adicionar_guardiao(req.info_hash, guardiao, cliente->id);
 
     auto peers = repo_.listar_peers(req.info_hash);
     contar(peers, resp);
@@ -72,9 +82,21 @@ AnnounceResponse Tracker::peers(const ConsultaPeers& consulta) {
     return resp;
 }
 
-bool Tracker::autorizado(const std::string& chave) const {
+// Quem guarda parte da chave do arquivo. O leecher pede a parte pra eles
+AnnounceResponse Tracker::guardioes(const ConsultaPeers& consulta) {
+    if (!autorizado(consulta.chave)) return falha("cliente nao autorizado");
+
+    repo_.remover_expirados(relogio_() - config_.interval * config_.fator_expiracao);
+
+    AnnounceResponse resp;
+    resp.peers = repo_.listar_guardioes(consulta.info_hash);
+    return resp;
+}
+
+std::optional<Cliente> Tracker::autorizado(const std::string& chave) const {
     auto cliente = repo_.buscar_cliente(chave);
-    return cliente && cliente->ativo;
+    if (cliente && !cliente->ativo) return std::nullopt;
+    return cliente;
 }
 
 AnnounceResponse Tracker::falha(std::string motivo) const {

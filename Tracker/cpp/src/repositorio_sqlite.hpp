@@ -33,6 +33,11 @@ public:
     std::vector<Cliente> listar_clientes() const override;
     bool revogar_cliente(std::int64_t id) override;
 
+    void adicionar_guardiao(const std::string& info_hash, const std::string& peer_id,
+                            std::int64_t cliente_id) override;
+    std::optional<std::int64_t> dono_dos_guardioes(const std::string& info_hash) const override;
+    std::vector<Peer> listar_guardioes(const std::string& info_hash) const override;
+
 private:
     void fechar();
     void criar_ou_migrar_schema();
@@ -51,6 +56,9 @@ private:
     sqlite3_stmt* st_buscar_cliente_ = nullptr;
     sqlite3_stmt* st_listar_clientes_ = nullptr;
     sqlite3_stmt* st_revogar_ = nullptr;
+    sqlite3_stmt* st_adicionar_guardiao_ = nullptr;
+    sqlite3_stmt* st_dono_guardioes_ = nullptr;
+    sqlite3_stmt* st_listar_guardioes_ = nullptr;
 };
 
 } // namespace tracker

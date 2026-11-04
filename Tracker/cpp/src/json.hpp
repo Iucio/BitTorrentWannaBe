@@ -11,4 +11,7 @@ std::string json_string(const std::string& s);
 
 std::string resposta_para_json(const AnnounceResponse& resp);
 
+// {"guardioes": [...]} com os peers da resposta, ou failure_reason
+std::string guardioes_para_json(const AnnounceResponse& resp);
+
 } // namespace tracker
