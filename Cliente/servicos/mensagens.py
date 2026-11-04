@@ -38,6 +38,10 @@ class Id(IntEnum):
     BITFIELD = 5
     REQUEST = 6
     PIECE = 7
+    # Partes da chave do Shamir. Temq patir do 30 pq o BitTorrent usa no 20 extensões
+    GUARDAR_PARTE = 30
+    PEDIR_PARTE = 31
+    PARTE = 32
 
 
 # ---------------------------------------------------------------------------
@@ -169,7 +173,54 @@ class Piece:
         return _com_tamanho(Id.PIECE, struct.pack(">II", self.indice, self.inicio) + self.bloco)
 
 
-Mensagem = Union[Choke, Unchoke, Interested, NotInterested, Have, Bitfield, Request, Piece]
+# ---------------------------------------------------------------------------
+# Partes da chave (Shamir)
+# ---------------------------------------------------------------------------
+
+TAMANHO_NUMERO_PARTE = 67 # tudo pela aura
+
+
+def _parte_para_bytes(x: int, y: int) -> bytes:
+    return x.to_bytes(TAMANHO_NUMERO_PARTE, "big") + y.to_bytes(TAMANHO_NUMERO_PARTE, "big")
+
+
+def _parte_de_bytes(dados: bytes) -> tuple:
+    return (int.from_bytes(dados[:TAMANHO_NUMERO_PARTE], "big"),
+            int.from_bytes(dados[TAMANHO_NUMERO_PARTE:], "big"))
+
+
+@dataclass(frozen=True)
+class GuardarParte:
+    """'Guarda esta parte da chave do arquivo.'"""
+
+    x: int
+    y: int
+
+    def para_bytes(self) -> bytes:
+        return _com_tamanho(Id.GUARDAR_PARTE, _parte_para_bytes(self.x, self.y))
+
+
+@dataclass(frozen=True)
+class PedirParte:
+    """'Me manda a parte da chave que você guarda.'"""
+
+    def para_bytes(self) -> bytes:
+        return _com_tamanho(Id.PEDIR_PARTE)
+
+
+@dataclass(frozen=True)
+class Parte:
+    """'Aqui está a parte.' Também confirma o GuardarParte."""
+
+    x: int
+    y: int
+
+    def para_bytes(self) -> bytes:
+        return _com_tamanho(Id.PARTE, _parte_para_bytes(self.x, self.y))
+
+
+Mensagem= Union[Choke, Unchoke, Interested, NotInterested, Have, Bitfield, Request, Piece,
+                 GuardarParte, PedirParte, Parte]
 
 
 def decodificar(conteudo: bytes) -> Mensagem:
@@ -212,6 +263,15 @@ def decodificar(conteudo: bytes) -> Mensagem:
             raise ErroProtocolo("PIECE sem índice e início")
         indice, inicio = struct.unpack(">II", dados[:8])
         return Piece(indice, inicio, bytes(dados[8:]))
+    if id_ == Id.GUARDAR_PARTE:
+        exigir(2 * TAMANHO_NUMERO_PARTE)
+        return GuardarParte(*_parte_de_bytes(dados))
+    if id_ == Id.PEDIR_PARTE:
+        exigir(0)
+        return PedirParte()
+    if id_ == Id.PARTE:
+        exigir(2 * TAMANHO_NUMERO_PARTE)
+        return Parte(*_parte_de_bytes(dados))
     raise ErroProtocolo(f"id de mensagem desconhecido: {id_}")
 
 
