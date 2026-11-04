@@ -17,7 +17,7 @@ tracker = os.environ.get("TRACKER_URL", "http://127.0.0.1:6969")
 chave = os.environ.get("TRACKER_CHAVE", "")
 
 # Início do programa
-cliente = Cliente.Cliente(chave)
+cliente = Cliente.Cliente(chave, tracker)
 
 dir = Path(__file__).parent.parent
 path_torrent = Path(sys.argv[1]) if len(sys.argv) > 1 else dir / "Arquivo demo/spyxfamily_op.mp4.torrent"

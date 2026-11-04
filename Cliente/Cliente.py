@@ -2,17 +2,24 @@ import random, string, socket, Sessao, threading as t, time, sys
 from servicos.request import request_tracker
 from servicos.mensagens import ler_handshake, ErroProtocolo
 from servicos.evento import Event
+from servicos.partes import Guardiao
 
 class Cliente:
-    def __init__(self, chave=""):
+    def __init__(self, chave="", tracker=None):
         self.chave = chave # Chave de acesso
         self.peer_id = self._gerar_peer_id()
         self.server = self._gerar_servidor()
         self.host, self.porta = self.server.getsockname()
         self.sessoes = {}
+        self.guardiao = None # Guarda partes da chave que outros seeders confiarem (servicos/partes.py)
         self._interface()
         print(f"[BitTorrentWannaBe] Esperando peers na porta {self.porta}\n")
         t.Thread(target=self._aceitar_peers, daemon=True).start() # Atende outros peers em segundo plano
+        if tracker:
+            self.guardiao = Guardiao(self, tracker)
+            resposta = self.guardiao.anunciar(Event.STARTED)
+            if "failure_reason" in resposta:
+                sys.exit(f"[BitTorrentWannaBe] Tracker recusou: {resposta['failure_reason']}")
 
     # Método privado da classe
     def _gerar_peer_id(self): # Ainda não sei onde que vai ficar essa função.
@@ -48,7 +55,9 @@ class Cliente:
                 if handshake:
                     print("[Seeder] Handshake recebido")
                 sessao = self.sessoes.get(handshake.info_hash)
-                if sessao:
+                if handshake.partes and self.guardiao: # Conexão de partes da chave, não de peças
+                    self.guardiao.atender(conexao, handshake, endereco[0])
+                elif sessao:
                     sessao.upload(conexao)
                 else:
                     motivo = "[Seeder] pediu um arquivo que este cliente não tem"
@@ -87,6 +96,8 @@ class Cliente:
             self.event = Event.STOPPED
         for sessao in self.sessoes.values():
             sessao.shutdown(self.porta, self.peer_id)
+        if self.guardiao:
+            self.guardiao.anunciar(Event.STOPPED) # Sai 
         self.server.close() # Libera recursos
         try:
             print(f"\n[BitTorrentWannaBe] Desligando cliente...")

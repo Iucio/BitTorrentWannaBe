@@ -63,10 +63,14 @@ class Handshake:
 
     | 1 byte | 19 bytes              | 8 bytes        | 20 bytes  | 20 bytes |
     | 19     | "BitTorrent protocol" | reservado (0s) | info_hash | peer_id  |
+
+    partes=True liga o 1 bit reservado: a conexão é de partes da chave, não de pecas
+    O BitTorrent usa esses bits do mesmo jeito, pra avisar extensões
     """
 
     info_hash: bytes
     peer_id: bytes
+    partes: bool = False
 
     def __post_init__(self):
         # a classe é imutável (frozen), então a conversão usa object.__setattr__
@@ -74,7 +78,8 @@ class Handshake:
         object.__setattr__(self, "peer_id", _bytes20(self.peer_id, "peer_id"))
 
     def para_bytes(self) -> bytes:
-        return bytes([len(PROTOCOLO)]) + PROTOCOLO + bytes(8) + self.info_hash + self.peer_id
+        reservado = bytes([1 if self.partes else 0]) + bytes(7)
+        return bytes([len(PROTOCOLO)]) + PROTOCOLO + reservado + self.info_hash + self.peer_id
 
 
 def decodificar_handshake(dados: bytes) -> Handshake:
@@ -82,7 +87,7 @@ def decodificar_handshake(dados: bytes) -> Handshake:
         raise ErroProtocolo(f"handshake deve ter {TAMANHO_HANDSHAKE} bytes, veio {len(dados)}")
     if dados[0] != len(PROTOCOLO) or dados[1:20] != PROTOCOLO:
         raise ErroProtocolo("handshake de outro protocolo")
-    return Handshake(info_hash=dados[28:48], peer_id=dados[48:68])
+    return Handshake(info_hash=dados[28:48], peer_id=dados[48:68], partes=bool(dados[20] & 1))
 
 
 # ---------------------------------------------------------------------------
