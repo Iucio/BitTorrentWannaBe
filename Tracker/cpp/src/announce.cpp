@@ -17,8 +17,7 @@ Tracker::Tracker(Repositorio& repo, Config config, std::function<Segundos()> rel
 
 AnnounceResponse Tracker::announce(const AnnounceRequest& req) {
     // só cliente cadastrado e não revogado entra na rede
-    auto cliente = repo_.buscar_cliente(req.chave);
-    if (!cliente || !cliente->ativo) return falha("cliente nao autorizado");
+    if (!autorizado(req.chave)) return falha("cliente nao autorizado");
 
     const Segundos agora = relogio_();
     repo_.remover_expirados(agora - config_.interval * config_.fator_expiracao);
@@ -55,6 +54,27 @@ AnnounceResponse Tracker::announce(const AnnounceRequest& req) {
     contar(peers, resp);
     resp.peers = escolher_peers(std::move(peers), req.peer_id, req.numwant);
     return resp;
+}
+
+// Lista o swarm inteiro sem registrar quem pergunta nem olhar o min_interval
+// Ideia é usar isso para o seeder escolher os clientes e o guardião validar um leecher
+// Precisa ver dps algum tipo de restrição pra ataques DoS aqui, poderia sersó um limit rate msm e otimizações no banco
+AnnounceResponse Tracker::peers(const ConsultaPeers& consulta) {
+    if (!autorizado(consulta.chave)) return falha("cliente nao autorizado");
+
+    repo_.remover_expirados(relogio_() - config_.interval * config_.fator_expiracao);
+
+    AnnounceResponse resp;
+    resp.interval = config_.interval;
+    resp.min_interval = config_.min_interval;
+    resp.peers = repo_.listar_peers(consulta.info_hash);
+    contar(resp.peers, resp);
+    return resp;
+}
+
+bool Tracker::autorizado(const std::string& chave) const {
+    auto cliente = repo_.buscar_cliente(chave);
+    return cliente && cliente->ativo;
 }
 
 AnnounceResponse Tracker::falha(std::string motivo) const {

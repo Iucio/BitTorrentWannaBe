@@ -20,4 +20,7 @@ std::optional<std::map<std::string, std::string>> parse_query(const std::string&
 std::variant<AnnounceRequest, std::string> ler_announce(const std::string& query,
                                                         const std::string& ip_remetente);
 
+// Monta a ConsultaPeers (/peers) ou devolve a mensagem de erro.
+std::variant<ConsultaPeers, std::string> ler_consulta_peers(const std::string& query);
+
 } // namespace tracker

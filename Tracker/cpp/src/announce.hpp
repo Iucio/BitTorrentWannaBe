@@ -23,8 +23,10 @@ public:
                      std::function<Segundos()> relogio = relogio_sistema);
 
     AnnounceResponse announce(const AnnounceRequest& req);
+    AnnounceResponse peers(const ConsultaPeers& consulta);
 
 private:
+    bool autorizado(const std::string& chave) const;
     AnnounceResponse falha(std::string motivo) const;
     void contar(const std::vector<Peer>& peers, AnnounceResponse& resp) const;
     std::vector<Peer> escolher_peers(std::vector<Peer> candidatos, const std::string& peer_id,

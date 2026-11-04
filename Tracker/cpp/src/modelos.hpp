@@ -25,6 +25,12 @@ struct AnnounceRequest {
     std::string chave;
 };
 
+// GET /peers: quem está no swarm, sem entrar nele
+struct ConsultaPeers {
+    std::string info_hash; // 20 bytes
+    std::string chave;
+};
+
 struct Peer {
     std::string peer_id;
     std::string ip;
