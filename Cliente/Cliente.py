@@ -1,4 +1,4 @@
-import random, string, socket, Sessao, threading as t, time, sys
+import random, string, socket, Sessao, threading as t, time, subprocess
 from servicos.request import request_tracker
 from servicos.mensagens import ler_handshake, ErroProtocolo
 from servicos.evento import Event
@@ -10,9 +10,16 @@ class Cliente:
         self.server = self._gerar_servidor()
         self.host, self.porta = self.server.getsockname()
         self.sessoes = {}
+        self.lockdown = False
         self._interface()
         print(f"[BitTorrentWannaBe] Esperando peers na porta {self.porta}\n")
         t.Thread(target=self._aceitar_peers, daemon=True).start() # Atende outros peers em segundo plano
+
+
+    def add_sessao(self, torrent):
+        nova_sessao = Sessao.Sessao(torrent, self.peer_id)
+        self.sessoes[nova_sessao.info_hash] = nova_sessao
+        return nova_sessao
 
     # Método privado da classe
     def _gerar_peer_id(self): # Ainda não sei onde que vai ficar essa função.
@@ -69,27 +76,53 @@ class Cliente:
         if caminho_arquivo:
             nova_sessao.carregar_arquivo(caminho_arquivo)
         self.sessoes[nova_sessao.info_hash] = nova_sessao
-        resposta = self.announce(nova_sessao.info_hash) # Primeiro announce (event=started) já traz o swarm
-        if "failure_reason" in resposta: 
-            sys.exit(f"[BitTorrentWannaBe] Tracker recusou: {resposta['failure_reason']}")
+        #self.announce(nova_sessao.info_hash) # Primeiro announce (event=started) já traz o swarm
+        beat = t.Thread(target=self.heartbeat, args=(tracker,), daemon=True)
+        beat.start()
         return nova_sessao
 
     # Announce de uma sessao com o event atual dela. Retorna a resposta do Tracker
     def announce(self, info_hash):
         sessao = self.sessoes[info_hash]
         resposta = sessao.announce(self.porta, self.peer_id, sessao.event)
+        if not resposta:
+            self._lockdown()
         sessao.atualizar_dados_tracker(resposta)
-        return resposta
+
+    def _recuperacao(self):
+        print("[BitTorrentWannaBe] Tracker ativo, retomando sessoes...")
+        for sessao in self.sessoes.values():
+            sessao.lockdown(False)
+
+    def heartbeat(self, tracker):
+        print("[BitTorrentWannaBe] Iniciando heartbeat...")
+        while request_tracker(tracker):
+            time.sleep(15)
+        print("[BitTorrentWannaBe] Falha no Tracker, iniciando lockdown...")
+        self._lockdown()
+        print("[BitTorrentWannaBe] Testando Tracker novamente...")
+        resposta = request_tracker(tracker)
+        if resposta:
+            self._recuperacao()
+            return None
+        
+        print("[BitTorrentWannaBe] Tracker inativo, encerrando cliente...")
+        self.shutdown()
+        exit(1)
+
+    def _lockdown(self):
+        for sessao in self.sessoes.values():
+            print(f"[BitTorrentWannaBe] congelando sessoes {sessao.info_hash}")
+            sessao.lockdown(True)
+        print(f"[BitTorrentWannaBe] Lockdown completo.")
 
     def shutdown(self):
-        print(f"\n[BitTorrentWannaBe] Desligando...")
+        print(f"\n[BitTorrentWannaBe] Desligando cliente...")         
         for sessao in self.sessoes.values():
             self.event = Event.STOPPED
-        for sessao in self.sessoes.values():
             sessao.shutdown(self.porta, self.peer_id)
         self.server.close() # Libera recursos
         try:
-            print(f"\n[BitTorrentWannaBe] Desligando cliente...")
             self.server.shutdown(socket.SHUT_RDWR) # Finaliza a sessao
             self.server.close() # Libera recursos 
         except Exception as e:

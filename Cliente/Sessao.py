@@ -4,7 +4,7 @@ from servicos.url_encoder import url_encode
 from servicos.request import request_tracker
 from GerenciadorDownload import GerenciadorDownload
 from servicos.p2p import fragmentar_arquivo
-from servicos.mensagens import Bitfield, Unchoke, Interested, Request, Piece, bitfield_de_pecas, ler_mensagem
+from servicos.mensagens import Bitfield, Unchoke, Choke, Interested, Request, Piece, bitfield_de_pecas, ler_mensagem
 from servicos.evento import Event
 
 class Sessao:
@@ -17,6 +17,8 @@ class Sessao:
         self.chave = "" # Chave de acesso do cliente, vai em todo announce
         self.uploaded = uploaded # Quantos bytes foram compartilhados na rede pelo nó
         self.downloaded = downloaded # Quantos bytes o nó baixou da rede
+        self._lockdown = False
+        self._shutdown = False
         # Quantos bytes faltam para baixar do arquivo espeficicado pelo info_hash, começa com o arquivo todo, recalcula durante o bglh la
         
         if left is None:
@@ -40,7 +42,7 @@ class Sessao:
     # Atualizar dados interos através da resposta do Tracker
     def atualizar_dados_tracker(self, dados_tracker:dict):
         if "failure_reason" in dados_tracker: # Tracker recusou o announce, nada muda
-            return
+            return False
         self.interval = dados_tracker["interval"]
         self.min_interval = dados_tracker["min_interval"]
         self.complete = dados_tracker["complete"]
@@ -65,6 +67,8 @@ class Sessao:
         while len(gerenciador.pecas_baixadas) < gerenciador.total_pecas:
             barra.update(len(gerenciador.pecas_baixadas))
             time.sleep(0.25)
+            if self._shutdown:
+                exit(1)
 
         barra.finish()
         print(f"\n DOWNLOAD CONCLUÍDO COM SUCESSO!")
@@ -86,12 +90,15 @@ class Sessao:
 
             if isinstance(mensagem, Request):
                 bloco = self._bloco(mensagem)
-                print(f"[Seeder] Mandando peca {mensagem.indice}")
+                print(f"[Seeder] Piece {mensagem.indice}")
                 conexao.sendall(bloco.para_bytes())
             # Libera os pedidos
-            elif isinstance(mensagem, Interested):
-                print("[Seeder] Mandando unchoke...")
+            elif isinstance(mensagem, Interested) and not self._lockdown:
+                print(f"[Seeder] Unchoke {conexao.getpeername()}")
                 conexao.sendall(Unchoke().para_bytes())
+            else:
+                print(f"[Lockdown] Choke {conexao.getpeername()}")
+                conexao.sendall(Choke().para_bytes())
 
     # Recorta o bloco pedido. Pedido fora da peça derruba a conexão
     def _bloco(self, pedido):
@@ -99,8 +106,12 @@ class Sessao:
         self.uploaded += pedido.tamanho
         return Piece(pedido.indice, pedido.inicio, peca[pedido.inicio:pedido.inicio + pedido.tamanho])
 
+    def lockdown(self, switch:bool):
+        self._lockdown = switch
     # Envia event=stopped para o tracker, sinalizando o término da sessao
     def shutdown(self, porta, peer_id):
-        print(f"[BitTorrentWannaBe] DESLIGANDO SESSAO...  {self.event}")
-        # avisar pro trackeer que acabou, senão só sai por timeout
-        return self.announce(porta, peer_id, Event.STOPPED)
+        if not self._lockdown:
+            print(f"[BitTorrentWannaBe] DESLIGANDO SESSAO...  {self.event}")
+            # avisar pro trackeer que acabou, senão só sai por timeout
+            return self.announce(porta, peer_id, Event.STOPPED)
+        self._shutdown = True
