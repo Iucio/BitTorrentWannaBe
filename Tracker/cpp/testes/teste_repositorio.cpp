@@ -99,6 +99,8 @@ static void testar_tracker(Repositorio& repo) {
     req.info_hash = hash_binario('C');
     req.ip = "10.0.0.1";
     req.porta = 7000;
+    repo.cadastrar_cliente("teste", "chave-teste", agora);
+    req.chave = "chave-teste";
 
     req.peer_id = "-UF0001-seeder000000";
     req.left = 0;
@@ -121,6 +123,37 @@ static void testar_tracker(Repositorio& repo) {
     VERIFICA(resp.complete == 0 && resp.incomplete == 1);
 }
 
+static void testar_clientes(Repositorio& repo) {
+    VERIFICA(!repo.buscar_cliente("chave-do-a"));
+    VERIFICA(repo.listar_clientes().empty());
+
+    const auto id_a = repo.cadastrar_cliente("PC-Lab-01", "chave-do-a", 1000);
+    const auto id_b = repo.cadastrar_cliente("PC-Lab-02", "chave-do-b", 2000);
+    VERIFICA(id_a != id_b);
+
+    auto a = repo.buscar_cliente("chave-do-a");
+    VERIFICA(a && a->id == id_a && a->nome == "PC-Lab-01" && a->chave == "chave-do-a");
+    VERIFICA(a && a->ativo && a->criado_em == 1000); // cliente novo já entra ativo
+    auto b = repo.buscar_cliente("chave-do-b");
+    VERIFICA(b && b->id == id_b && b->nome == "PC-Lab-02");
+    VERIFICA(!repo.buscar_cliente("chave-que-ninguem-tem"));
+
+    // listar traz todos, em ordem de id
+    const auto todos = repo.listar_clientes();
+    VERIFICA(todos.size() == 2);
+    VERIFICA(todos.size() == 2 && todos[0].id == id_a && todos[0].nome == "PC-Lab-01");
+    VERIFICA(todos.size() == 2 && todos[1].id == id_b && todos[1].nome == "PC-Lab-02");
+
+    // revogar desativa só aquele cliente, e o cadastro continua lá
+    VERIFICA(repo.revogar_cliente(id_a));
+    auto a_revogado = repo.buscar_cliente("chave-do-a");
+    VERIFICA(a_revogado && !a_revogado->ativo);
+    auto b_continua = repo.buscar_cliente("chave-do-b");
+    VERIFICA(b_continua && b_continua->ativo);
+    VERIFICA(repo.listar_clientes().size() == 2);
+    VERIFICA(!repo.revogar_cliente(9999)); // id que não existe
+}
+
 static void testar_persistencia() {
     const std::string arquivo = "teste_persistencia.db";
     std::remove(arquivo.c_str());
@@ -132,6 +165,30 @@ static void testar_persistencia() {
         RepositorioSQLite repo(arquivo); // reabre: o dado tem que estar lá
         auto p = repo.buscar_peer(hash_binario('D'), "-UF0001-persistente0");
         VERIFICA(p && p->ultimo_announce == 42);
+    }
+    for (const char* sufixo : {"", "-wal", "-shm"}) std::remove((arquivo + sufixo).c_str());
+}
+
+// Cadastro e revogação ficam gravados no arquivo: o Tracker reinicia e os
+// clientes continuam lá
+static void testar_clientes_persistem() {
+    const std::string arquivo = "teste_clientes.db";
+    for (const char* sufixo : {"", "-wal", "-shm"}) std::remove((arquivo + sufixo).c_str());
+    std::int64_t id = 0;
+    {
+        RepositorioSQLite repo(arquivo);
+        id = repo.cadastrar_cliente("PC-Lab-03", "chave-persistente", 42);
+    }
+    {
+        RepositorioSQLite repo(arquivo); // reabre: o cliente tem que estar lá
+        auto c = repo.buscar_cliente("chave-persistente");
+        VERIFICA(c && c->id == id && c->nome == "PC-Lab-03" && c->ativo && c->criado_em == 42);
+        repo.revogar_cliente(id);
+    }
+    {
+        RepositorioSQLite repo(arquivo); // a revogação também fica gravada
+        auto c = repo.buscar_cliente("chave-persistente");
+        VERIFICA(c && !c->ativo);
     }
     for (const char* sufixo : {"", "-wal", "-shm"}) std::remove((arquivo + sufixo).c_str());
 }
@@ -167,6 +224,44 @@ static void testar_migracao() {
     for (const char* sufixo : {"", "-wal", "-shm"}) std::remove((arquivo + sufixo).c_str());
 }
 
+// Banco da versão 2 (o tracker.db de quem já usava o Tracker antes do cadastro de
+// clientes): os peers ficam, e a tabela clientes é criada.
+static void testar_migracao_v2() {
+    const std::string arquivo = "teste_migracao_v2.db";
+    for (const char* sufixo : {"", "-wal", "-shm"}) std::remove((arquivo + sufixo).c_str());
+    sqlite3* db = nullptr;
+    sqlite3_open(arquivo.c_str(), &db);
+    sqlite3_exec(db,
+                 "CREATE TABLE peers (info_hash BLOB NOT NULL, peer_id BLOB NOT NULL,"
+                 " ip TEXT NOT NULL, porta INTEGER NOT NULL, left_bytes INTEGER NOT NULL,"
+                 " ultimo_announce INTEGER NOT NULL, uploaded INTEGER NOT NULL DEFAULT 0,"
+                 " downloaded INTEGER NOT NULL DEFAULT 0, PRIMARY KEY (info_hash, peer_id)) WITHOUT ROWID;"
+                 "INSERT INTO peers VALUES (zeroblob(20), CAST('-UF0001-versao200000' AS BLOB), '10.0.0.9', 6881, 0, 99, 5, 6);"
+                 "PRAGMA user_version = 2;",
+                 nullptr, nullptr, nullptr);
+    sqlite3_close(db);
+
+    {
+        RepositorioSQLite repo(arquivo);
+        auto p = repo.buscar_peer(std::string(20, '\0'), "-UF0001-versao200000");
+        VERIFICA(p && p->ultimo_announce == 99 && p->uploaded == 5 && p->downloaded == 6);
+    }
+
+    // confere direto no arquivo: subiu para a versão 3 e a tabela clientes existe
+    sqlite3_open(arquivo.c_str(), &db);
+    sqlite3_stmt* st = nullptr;
+    sqlite3_prepare_v2(db,
+                       "SELECT (SELECT user_version FROM pragma_user_version),"
+                       " (SELECT count(*) FROM sqlite_master WHERE type = 'table' AND name = 'clientes');",
+                       -1, &st, nullptr);
+    VERIFICA(sqlite3_step(st) == SQLITE_ROW);
+    VERIFICA(sqlite3_column_int(st, 0) == 3);
+    VERIFICA(sqlite3_column_int(st, 1) == 1);
+    sqlite3_finalize(st);
+    sqlite3_close(db);
+    for (const char* sufixo : {"", "-wal", "-shm"}) std::remove((arquivo + sufixo).c_str());
+}
+
 static void rodar(const char* nome, const std::function<void()>& teste) {
     const int antes = falhas;
     teste();
@@ -178,8 +273,12 @@ int main() {
     rodar("sqlite: operacoes basicas", [] { RepositorioSQLite r(":memory:"); testar_repositorio(r); });
     rodar("memoria: announce", [] { RepositorioMemoria r; testar_tracker(r); });
     rodar("sqlite: announce", [] { RepositorioSQLite r(":memory:"); testar_tracker(r); });
+    rodar("memoria: clientes", [] { RepositorioMemoria r; testar_clientes(r); });
+    rodar("sqlite: clientes", [] { RepositorioSQLite r(":memory:"); testar_clientes(r); });
     rodar("sqlite: persiste depois de fechar", testar_persistencia);
-    rodar("sqlite: migra banco da versao anterior", testar_migracao);
+    rodar("sqlite: clientes persistem depois de fechar", testar_clientes_persistem);
+    rodar("sqlite: migra banco da versao 1", testar_migracao);
+    rodar("sqlite: migra banco da versao 2", testar_migracao_v2);
 
     std::cout << (falhas ? "\nFALHOU\n" : "\ntodos os testes passaram\n");
     return falhas ? 1 : 0;

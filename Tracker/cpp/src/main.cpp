@@ -1,22 +1,117 @@
+#include <charconv>
 #include <cstdlib>
+#include <ctime>
+#include <iomanip>
 #include <iostream>
 #include <memory>
 #include <string>
 
 #include "announce.hpp"
+#include "chave.hpp"
 #include "repositorio_sqlite.hpp"
 #include "rotas.hpp"
 #include "servidor_http.hpp"
 
-// Uso: ./tracker [porta] [banco]   (padrões: 80 e tracker.db)
+namespace {
+
+const char* const BANCO_PADRAO = "tracker.db";
+
+int cadastrar(const std::string& nome, const std::string& caminho_banco) {
+    try {
+        tracker::RepositorioSQLite repo(caminho_banco);
+        const std::string chave = tracker::gerar_chave();
+        const auto id = repo.cadastrar_cliente(nome, chave, tracker::relogio_sistema());
+        std::cout << "cliente " << id << " cadastrado: " << nome << "\n"
+                  << "chave de acesso: " << chave << std::endl;
+        return 0;
+    } catch (const std::exception& e) {
+        std::cerr << e.what() << std::endl;
+        return 1;
+    }
+}
+
+// unix timestamp -> "2026-10-23 14:05", no fuso da máquina
+std::string data(tracker::Segundos s) {
+    const std::time_t t = static_cast<std::time_t>(s);
+    char texto[32] = "?";
+    if (const std::tm* tm = std::localtime(&t)) std::strftime(texto, sizeof texto, "%Y-%m-%d %H:%M", tm);
+    return texto;
+}
+
+int listar(const std::string& caminho_banco) {
+    try {
+        tracker::RepositorioSQLite repo(caminho_banco);
+        const auto clientes = repo.listar_clientes();
+        if (clientes.empty()) {
+            std::cout << "nenhum cliente cadastrado" << std::endl;
+            return 0;
+        }
+        std::cout << "id  situacao  cadastrado em     nome\n";
+        for (const auto& c : clientes) {
+            std::cout << std::left << std::setw(4) << c.id << std::setw(10)
+                      << (c.ativo ? "ativo" : "revogado") << std::setw(18) << data(c.criado_em)
+                      << c.nome << "\n";
+        }
+        return 0;
+    } catch (const std::exception& e) {
+        std::cerr << e.what() << std::endl;
+        return 1;
+    }
+}
+
+int revogar(const std::string& id_texto, const std::string& caminho_banco) {
+    std::int64_t id = 0;
+    const auto [fim, erro] = std::from_chars(id_texto.data(), id_texto.data() + id_texto.size(), id);
+    if (erro != std::errc{} || fim != id_texto.data() + id_texto.size()) {
+        std::cerr << "id invalido: " << id_texto << "\n";
+        return 1;
+    }
+    try {
+        tracker::RepositorioSQLite repo(caminho_banco);
+        if (!repo.revogar_cliente(id)) {
+            std::cerr << "cliente " << id << " nao existe" << std::endl;
+            return 1;
+        }
+        std::cout << "cliente " << id << " revogado" << std::endl;
+        return 0;
+    } catch (const std::exception& e) {
+        std::cerr << e.what() << std::endl;
+        return 1;
+    }
+}
+
+} // namespace
+
+// Uso:
+//   ./tracker [porta] [banco]            servidor (padrões: 80 e tracker.db)
+//   ./tracker cadastrar <nome> [banco]   cadastra um cliente e mostra a chave dele
+//   ./tracker clientes [banco]           lista os clientes cadastrados
+//   ./tracker revogar <id> [banco]       revoga a chave de um cliente
 int main(int argc, char** argv) {
+    const std::string comando = argc > 1 ? argv[1] : "";
+    if (comando == "cadastrar") {
+        if (argc < 3) {
+            std::cerr << "uso: ./tracker cadastrar <nome> [banco]\n";
+            return 1;
+        }
+        return cadastrar(argv[2], argc > 3 ? argv[3] : BANCO_PADRAO);
+    }
+    if (comando == "clientes") return listar(argc > 2 ? argv[2] : BANCO_PADRAO);
+    if (comando == "revogar") {
+        if (argc < 3) {
+            std::cerr << "uso: ./tracker revogar <id> [banco]\n";
+            return 1;
+        }
+        return revogar(argv[2], argc > 3 ? argv[3] : BANCO_PADRAO);
+    }
+
     int porta = argc > 1 ? std::atoi(argv[1]) : 80;
     if (porta < 1 || porta > 65535) {
         std::cerr << "porta invalida: " << argv[1] << "\n";
         return 1;
     }
 
-    const std::string caminho_banco = argc > 2 ? argv[2] : "tracker.db";
+    const std::string caminho_banco = argc > 2 ? argv[2] : BANCO_PADRAO;
     std::unique_ptr<tracker::RepositorioSQLite> repo;
     try {
         repo = std::make_unique<tracker::RepositorioSQLite>(caminho_banco);

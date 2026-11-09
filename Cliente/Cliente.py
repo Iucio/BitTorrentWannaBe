@@ -1,10 +1,11 @@
-import random, string, socket, Sessao, threading as t, time
+import random, string, socket, Sessao, threading as t, time, sys
 from servicos.request import request_tracker
 from servicos.mensagens import ler_handshake, ErroProtocolo
 from servicos.evento import Event
 
 class Cliente:
-    def __init__(self):
+    def __init__(self, chave=""):
+        self.chave = chave # Chave de acesso
         self.peer_id = self._gerar_peer_id()
         self.server = self._gerar_servidor()
         self.host, self.porta = self.server.getsockname()
@@ -62,12 +63,15 @@ class Cliente:
     # Salva a sessão por info_hash como chave de busca. Com caminho_arquivo, o nó já tem o arquivo e vira seeder
     def instanciar_sessao(self, torrent, caminho_arquivo=None, tracker=None):
         nova_sessao = Sessao.Sessao(torrent, self.peer_id)
+        nova_sessao.chave = self.chave
         if tracker:
             nova_sessao.tracker = tracker
         if caminho_arquivo:
             nova_sessao.carregar_arquivo(caminho_arquivo)
         self.sessoes[nova_sessao.info_hash] = nova_sessao
-        self.announce(nova_sessao.info_hash) # Primeiro announce (event=started) já traz o swarm
+        resposta = self.announce(nova_sessao.info_hash) # Primeiro announce (event=started) já traz o swarm
+        if "failure_reason" in resposta: 
+            sys.exit(f"[BitTorrentWannaBe] Tracker recusou: {resposta['failure_reason']}")
         return nova_sessao
 
     # Announce de uma sessao com o event atual dela. Retorna a resposta do Tracker

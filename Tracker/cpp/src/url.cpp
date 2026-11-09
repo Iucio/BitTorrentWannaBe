@@ -69,7 +69,7 @@ std::variant<AnnounceRequest, std::string> ler_announce(const std::string& query
     if (!params_opt) return std::string("url mal formada");
     auto& params = *params_opt;
 
-    for (const char* obrigatorio : {"info_hash", "peer_id", "port", "left"}) {
+    for (const char* obrigatorio : {"info_hash", "peer_id", "port", "left", "chave"}) {
         if (!params.count(obrigatorio)) return std::string("parametro ausente: ") + obrigatorio;
     }
 
@@ -114,6 +114,9 @@ std::variant<AnnounceRequest, std::string> ler_announce(const std::string& query
     else if (evento == "completed") req.evento = Evento::Completed;
     else if (evento == "stopped") req.evento = Evento::Stopped;
     else return std::string("event invalido");
+
+    req.chave = params["chave"];
+    if (req.chave.empty() || req.chave.size() > 64) return std::string("chave invalida");
 
     // não confia no ip da url: daria pra colocar o ip de outra máquina no swarm
     req.ip = ip_remetente;

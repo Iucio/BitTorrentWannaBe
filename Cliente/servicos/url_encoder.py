@@ -12,7 +12,8 @@ def url_encode(sessao:Sessao, porta, peer_id, event=""):
         "uploaded": sessao.uploaded,
         "downloaded": sessao.downloaded,
         "left": sessao.left,
-        "private": sessao.private
+        "private": sessao.private,
+        "chave": sessao.chave # Sem ela o Tracker recusa
     }
     if event:
         params.update({"event": event})

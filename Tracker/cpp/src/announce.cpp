@@ -16,6 +16,10 @@ Tracker::Tracker(Repositorio& repo, Config config, std::function<Segundos()> rel
     : repo_(repo), config_(config), relogio_(std::move(relogio)), rng_(std::random_device{}()) {}
 
 AnnounceResponse Tracker::announce(const AnnounceRequest& req) {
+    // só cliente cadastrado e não revogado entra na rede
+    auto cliente = repo_.buscar_cliente(req.chave);
+    if (!cliente || !cliente->ativo) return falha("cliente nao autorizado");
+
     const Segundos agora = relogio_();
     repo_.remover_expirados(agora - config_.interval * config_.fator_expiracao);
 

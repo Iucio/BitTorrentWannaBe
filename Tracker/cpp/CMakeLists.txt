@@ -27,6 +27,7 @@ endif()
 
 add_library(tracker_core
     src/announce.cpp
+    src/chave.cpp
     src/json.cpp
     src/repositorio.cpp
     src/repositorio_sqlite.cpp

@@ -7,8 +7,9 @@ import time
 # sem argumento arquivo e torrent são o vídeo da demo
 
 tracker = os.environ.get("TRACKER_URL", "http://127.0.0.1:6969")
+chave = os.environ.get("TRACKER_CHAVE", "") # ./tracker cadastrar <nome> mostra a chave
 
-cliente = Cliente.Cliente()
+cliente = Cliente.Cliente(chave)
 
 dir = Path(__file__).parent.parent
 path = Path(sys.argv[1]) if len(sys.argv) > 1 else dir / "Arquivo demo/spyxfamily_op.mp4"
