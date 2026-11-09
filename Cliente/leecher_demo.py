@@ -18,6 +18,7 @@ spyxfamily = ler_torrent(path_torrent)
 
 # Inicio das sessoes nos arquivos (upload ou download)
 # Faz o announce e recebe os peers do Tracker
+coisa = cliente.add_sessao(spyxfamily)
 sessao = cliente.instanciar_sessao(spyxfamily, tracker=tracker) 
 
 sessao.download()
