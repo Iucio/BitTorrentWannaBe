@@ -128,7 +128,6 @@ class MiniLeecher(threading.Thread):
             self.sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM) # Instancia o socket cliente
             self.sock.settimeout(5.0) # Caso o peer esteja offline, o timeout para o connect
             self.sock.connect(self.peer)
-            self.sock.settimeout(None) # Deixo livre, já que a conexão foi estabelecida
 
             # Abre a conexão, realiza o handshake e recebe o bitfield. Retorna as peças que aquele peer tem
             pecas_do_peer = self.handshake()
@@ -136,12 +135,19 @@ class MiniLeecher(threading.Thread):
 
             # Registra as peças no mapa para o gerenciador designar quais threads vão pedir quais peças
             self.gerenciador.registrar_pecas(self.peer, pecas_do_peer)
-             
-            if type(self.interested()) == Unchoke: # Liberou geral!
-                self.choked = False
-                print(f"[MiniLeecher] {self.peer}: unchoke")
-            time.sleep(3)
-            self._loop_trabalho()
+            
+            # Se receber Choke, tenta receber Unchoke 5 vezes até sair.
+            tentativas = 0 
+            while self.choked and tentativas < 5:          
+                if type(self.interested()) == Unchoke: # Liberou geral!
+                    self.choked = False
+                    print(f"[MiniLeecher] {self.peer}: Unchoke")
+                    time.sleep(3)
+                    self._loop_trabalho()
+                else: # Recebeu Choke
+                    print(f"[MiniLeecher] {self.peer}: Choke")
+                    time.sleep(3) # De 3 em 3 segundos ele tenta novamente o mesmo peer
+                    tentativas += 1
                 
         except Exception as e:
             print(f"[MiniLeecher] {self.peer} erro: {e}")
