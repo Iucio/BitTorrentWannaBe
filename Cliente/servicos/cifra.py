@@ -10,7 +10,9 @@ O arquivo cifrado é:
 """
 
 import secrets
+from itertools import combinations
 
+from cryptography.exceptions import InvalidTag
 from cryptography.hazmat.primitives.ciphers.aead import AESGCM
 
 from servicos.shamir import P, gen_keys, interpol
@@ -52,6 +54,18 @@ def juntar_chave(partes):
     if segredo.bit_length() > 8 * tam_chave:
         raise ValueError("as partes não formam a chave (erradas ou a menos)")
     return segredo.to_bytes(tam_chave, "big")
+
+
+def decifrar_com_partes(origem, destino, partes, k):
+    """Tenta toda combinação de k partes, então parte errada no meio não atrapalha.
+    False se nenhuma abrir (partes erradas ou arquivo corrompido)."""
+    for combinacao in combinations(partes, k):
+        try:
+            decifrar_arquivo(origem, destino, juntar_chave(list(combinacao)))
+            return True
+        except (ValueError, InvalidTag):
+            continue
+    return False
 
 
 # Parte em arquivo do uploader q envia dps pra cada peer

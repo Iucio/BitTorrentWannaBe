@@ -1,8 +1,6 @@
 import sys
-from itertools import combinations
 from pathlib import Path
-from cryptography.exceptions import InvalidTag
-from servicos.cifra import juntar_chave, ler_parte, decifrar_arquivo
+from servicos.cifra import ler_parte, decifrar_com_partes
 from servicos.torrent_reader import ler_torrent
 
 # python3 decifrar.py <arquivo_baixado> <torrent> <parte>
@@ -20,14 +18,7 @@ partes = [ler_parte(caminho) for caminho in arquivos_partes]
 destino = Path("baixados") / info["name"].removesuffix(".cifrado")
 destino.parent.mkdir(exist_ok=True)
 
-# Mesmo com chaves inválidas, tenta qualquer combinação de k chaves pra tentar decifrar
-for combinacao in combinations(partes, k):
-    try:
-        decifrar_arquivo(baixado, destino, juntar_chave(list(combinacao)))
-        break
-    except (ValueError, InvalidTag):
-        continue
-else:
+if not decifrar_com_partes(baixado, destino, partes, k):
     sys.exit("não deu pra abrir: partes erradas ou arquivo corrompido")
 
 print(f"arquivo aberto em {destino}")

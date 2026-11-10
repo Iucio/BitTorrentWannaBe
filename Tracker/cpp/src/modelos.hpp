@@ -23,6 +23,13 @@ struct AnnounceRequest {
     Evento evento = Evento::Nenhum;
     int numwant = 50;
     std::string chave;
+    std::vector<std::string> guardioes; // peer_ids que o seeder escolheu pra guardar as partes da chave
+};
+
+// GET /peers e /guardioes: consultas sobre um arquivo, sem entrar no swarm dele
+struct ConsultaPeers {
+    std::string info_hash; // 20 bytes
+    std::string chave;
 };
 
 struct Peer {

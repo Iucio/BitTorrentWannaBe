@@ -15,6 +15,7 @@ class Sessao:
         self.torrent = torrent # Dicionário do .torrent 
         self.peer_id = peer_id # Identificador do nó na rede
         self.chave = "" # Chave de acesso do cliente, vai em todo announce
+        self.guardioes = [] # peer_ids que o seeder escolheu pra guardar as partes da chave
         self.uploaded = uploaded # Quantos bytes foram compartilhados na rede pelo nó
         self.downloaded = downloaded # Quantos bytes o nó baixou da rede
         self._lockdown = False

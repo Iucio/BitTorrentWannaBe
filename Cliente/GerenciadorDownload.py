@@ -181,8 +181,9 @@ class MiniLeecher(threading.Thread):
         self.sock.sendall(pack_interested) # Mando o interested para o peer
         return ler_mensagem(self.sock) # Deve ser Unchoke ou Choke
         
+    # Fila vazia não é fim: o orquestrador pode ainda não ter colocado nada. O get() espera
     def _loop_trabalho(self):
-        while not self.choked and not self.fila_request.empty():
+        while not self.choked:
                 self._processar_peca()
 
             
@@ -205,9 +206,7 @@ class MiniLeecher(threading.Thread):
                 buffer_peca[begin: begin + len(dados_bloco)] = dados_bloco
 
                 blocos_recebidos += 1
-                if self.fila_request.empty():
-                    break
-                elif blocos_recebidos < total_blocos:
+                if blocos_recebidos < total_blocos:
                     index, begin, length = self.fila_request.get()
                      
         if validar_peca(index, buffer_peca, self.hash_pecas):

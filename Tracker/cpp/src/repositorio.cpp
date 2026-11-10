@@ -68,4 +68,31 @@ bool RepositorioMemoria::revogar_cliente(std::int64_t id) {
     return true;
 }
 
+void RepositorioMemoria::adicionar_guardiao(const std::string& info_hash, const std::string& peer_id,
+                                            std::int64_t cliente_id) {
+    guardioes_[info_hash].emplace(peer_id, cliente_id); // já existe: não muda
+}
+
+std::optional<std::int64_t> RepositorioMemoria::dono_dos_guardioes(const std::string& info_hash) const {
+    auto guardioes = guardioes_.find(info_hash);
+    if (guardioes == guardioes_.end() || guardioes->second.empty()) return std::nullopt;
+    return guardioes->second.begin()->second;
+}
+
+std::vector<Peer> RepositorioMemoria::listar_guardioes(const std::string& info_hash) const {
+    std::vector<Peer> peers;
+    auto guardioes = guardioes_.find(info_hash);
+    if (guardioes == guardioes_.end()) return peers;
+    for (const auto& [peer_id, _] : guardioes->second) {
+        std::optional<Peer> atual; // announce mais recente desse peer, em qualquer swarm
+        for (const auto& [_, swarm] : swarms_) {
+            auto p = swarm.find(peer_id);
+            if (p != swarm.end() && (!atual || p->second.ultimo_announce > atual->ultimo_announce))
+                atual = p->second;
+        }
+        if (atual) peers.push_back(*atual);
+    }
+    return peers;
+}
+
 } // namespace tracker

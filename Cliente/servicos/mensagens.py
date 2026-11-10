@@ -38,6 +38,10 @@ class Id(IntEnum):
     BITFIELD = 5
     REQUEST = 6
     PIECE = 7
+    # Partes da chave do Shamir. Temq patir do 30 pq o BitTorrent usa no 20 extensões
+    GUARDAR_PARTE = 30
+    PEDIR_PARTE = 31
+    PARTE = 32
 
 
 # ---------------------------------------------------------------------------
@@ -59,10 +63,14 @@ class Handshake:
 
     | 1 byte | 19 bytes              | 8 bytes        | 20 bytes  | 20 bytes |
     | 19     | "BitTorrent protocol" | reservado (0s) | info_hash | peer_id  |
+
+    partes=True liga o 1 bit reservado: a conexão é de partes da chave, não de pecas
+    O BitTorrent usa esses bits do mesmo jeito, pra avisar extensões
     """
 
     info_hash: bytes
     peer_id: bytes
+    partes: bool = False
 
     def __post_init__(self):
         # a classe é imutável (frozen), então a conversão usa object.__setattr__
@@ -70,7 +78,8 @@ class Handshake:
         object.__setattr__(self, "peer_id", _bytes20(self.peer_id, "peer_id"))
 
     def para_bytes(self) -> bytes:
-        return bytes([len(PROTOCOLO)]) + PROTOCOLO + bytes(8) + self.info_hash + self.peer_id
+        reservado = bytes([1 if self.partes else 0]) + bytes(7)
+        return bytes([len(PROTOCOLO)]) + PROTOCOLO + reservado + self.info_hash + self.peer_id
 
 
 def decodificar_handshake(dados: bytes) -> Handshake:
@@ -78,7 +87,7 @@ def decodificar_handshake(dados: bytes) -> Handshake:
         raise ErroProtocolo(f"handshake deve ter {TAMANHO_HANDSHAKE} bytes, veio {len(dados)}")
     if dados[0] != len(PROTOCOLO) or dados[1:20] != PROTOCOLO:
         raise ErroProtocolo("handshake de outro protocolo")
-    return Handshake(info_hash=dados[28:48], peer_id=dados[48:68])
+    return Handshake(info_hash=dados[28:48], peer_id=dados[48:68], partes=bool(dados[20] & 1))
 
 
 # ---------------------------------------------------------------------------
@@ -169,7 +178,54 @@ class Piece:
         return _com_tamanho(Id.PIECE, struct.pack(">II", self.indice, self.inicio) + self.bloco)
 
 
-Mensagem = Union[Choke, Unchoke, Interested, NotInterested, Have, Bitfield, Request, Piece]
+# ---------------------------------------------------------------------------
+# Partes da chave (Shamir)
+# ---------------------------------------------------------------------------
+
+TAMANHO_NUMERO_PARTE = 67 # tudo pela aura
+
+
+def _parte_para_bytes(x: int, y: int) -> bytes:
+    return x.to_bytes(TAMANHO_NUMERO_PARTE, "big") + y.to_bytes(TAMANHO_NUMERO_PARTE, "big")
+
+
+def _parte_de_bytes(dados: bytes) -> tuple:
+    return (int.from_bytes(dados[:TAMANHO_NUMERO_PARTE], "big"),
+            int.from_bytes(dados[TAMANHO_NUMERO_PARTE:], "big"))
+
+
+@dataclass(frozen=True)
+class GuardarParte:
+    """'Guarda esta parte da chave do arquivo.'"""
+
+    x: int
+    y: int
+
+    def para_bytes(self) -> bytes:
+        return _com_tamanho(Id.GUARDAR_PARTE, _parte_para_bytes(self.x, self.y))
+
+
+@dataclass(frozen=True)
+class PedirParte:
+    """'Me manda a parte da chave que você guarda.'"""
+
+    def para_bytes(self) -> bytes:
+        return _com_tamanho(Id.PEDIR_PARTE)
+
+
+@dataclass(frozen=True)
+class Parte:
+    """'Aqui está a parte.' Também confirma o GuardarParte."""
+
+    x: int
+    y: int
+
+    def para_bytes(self) -> bytes:
+        return _com_tamanho(Id.PARTE, _parte_para_bytes(self.x, self.y))
+
+
+Mensagem= Union[Choke, Unchoke, Interested, NotInterested, Have, Bitfield, Request, Piece,
+                 GuardarParte, PedirParte, Parte]
 
 
 def decodificar(conteudo: bytes) -> Mensagem:
@@ -212,6 +268,15 @@ def decodificar(conteudo: bytes) -> Mensagem:
             raise ErroProtocolo("PIECE sem índice e início")
         indice, inicio = struct.unpack(">II", dados[:8])
         return Piece(indice, inicio, bytes(dados[8:]))
+    if id_ == Id.GUARDAR_PARTE:
+        exigir(2 * TAMANHO_NUMERO_PARTE)
+        return GuardarParte(*_parte_de_bytes(dados))
+    if id_ == Id.PEDIR_PARTE:
+        exigir(0)
+        return PedirParte()
+    if id_ == Id.PARTE:
+        exigir(2 * TAMANHO_NUMERO_PARTE)
+        return Parte(*_parte_de_bytes(dados))
     raise ErroProtocolo(f"id de mensagem desconhecido: {id_}")
 
 

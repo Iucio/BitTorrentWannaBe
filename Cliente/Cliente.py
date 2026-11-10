@@ -1,19 +1,26 @@
-import random, string, socket, Sessao, threading as t, time, subprocess
+import random, string, socket, Sessao, threading as t, time, subprocess, sys
 from servicos.request import request_tracker
 from servicos.mensagens import ler_handshake, ErroProtocolo
 from servicos.evento import Event
+from servicos.partes import Guardiao
 
 class Cliente:
-    def __init__(self, chave=""):
+    def __init__(self, chave="", tracker=None):
         self.chave = chave # Chave de acesso
         self.peer_id = self._gerar_peer_id()
         self.server = self._gerar_servidor()
         self.host, self.porta = self.server.getsockname()
         self.sessoes = {}
         self.lockdown = False
+        self.guardiao = None # Guarda partes da chave que outros seeders confiarem (servicos/partes.py)
         self._interface()
         print(f"[BitTorrentWannaBe] Esperando peers na porta {self.porta}\n")
         t.Thread(target=self._aceitar_peers, daemon=True).start() # Atende outros peers em segundo plano
+        if tracker:
+            self.guardiao = Guardiao(self, tracker)
+            resposta = self.guardiao.anunciar(Event.STARTED)
+            if "failure_reason" in resposta:
+                sys.exit(f"[BitTorrentWannaBe] Tracker recusou: {resposta['failure_reason']}")
 
 
     def add_sessao(self, torrent):
@@ -55,7 +62,9 @@ class Cliente:
                 if handshake:
                     print("[Seeder] Handshake recebido")
                 sessao = self.sessoes.get(handshake.info_hash)
-                if sessao:
+                if handshake.partes and self.guardiao: # Conexão de partes da chave, não de peças
+                    self.guardiao.atender(conexao, handshake, endereco[0])
+                elif sessao:
                     sessao.upload(conexao)
                 else:
                     motivo = "[Seeder] pediu um arquivo que este cliente não tem"
@@ -68,15 +77,18 @@ class Cliente:
         print(f"[Seeder] Peer desconectou: {peer} ({motivo})")
 
     # Salva a sessão por info_hash como chave de busca. Com caminho_arquivo, o nó já tem o arquivo e vira seeder
-    def instanciar_sessao(self, torrent, caminho_arquivo=None, tracker=None):
+    def instanciar_sessao(self, torrent, caminho_arquivo=None, tracker=None, guardioes=()):
         nova_sessao = Sessao.Sessao(torrent, self.peer_id)
         nova_sessao.chave = self.chave
+        nova_sessao.guardioes = list(guardioes) # Vão no primeiro announce
         if tracker:
             nova_sessao.tracker = tracker
         if caminho_arquivo:
             nova_sessao.carregar_arquivo(caminho_arquivo)
         self.sessoes[nova_sessao.info_hash] = nova_sessao
-        #self.announce(nova_sessao.info_hash) # Primeiro announce (event=started) já traz o swarm
+        resposta = self.announce(nova_sessao.info_hash) # Primeiro announce (event=started) já traz o swarm e leva os guardiões
+        if "failure_reason" in resposta:
+            sys.exit(f"[BitTorrentWannaBe] Tracker recusou: {resposta['failure_reason']}")
         beat = t.Thread(target=self.heartbeat, args=(tracker,), daemon=True)
         beat.start()
         return nova_sessao
@@ -88,6 +100,7 @@ class Cliente:
         if not resposta:
             self._lockdown()
         sessao.atualizar_dados_tracker(resposta)
+        return resposta
 
     def _recuperacao(self):
         print("[BitTorrentWannaBe] Tracker ativo, retomando sessoes...")
@@ -121,6 +134,8 @@ class Cliente:
         for sessao in self.sessoes.values():
             self.event = Event.STOPPED
             sessao.shutdown(self.porta, self.peer_id)
+        if self.guardiao:
+            self.guardiao.anunciar(Event.STOPPED) # Sai 
         self.server.close() # Libera recursos
         try:
             self.server.shutdown(socket.SHUT_RDWR) # Finaliza a sessao
