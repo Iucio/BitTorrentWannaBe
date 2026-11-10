@@ -70,9 +70,10 @@ class Cliente:
         print(f"[Seeder] Peer desconectou: {peer} ({motivo})")
 
     # Salva a sessão por info_hash como chave de busca. Com caminho_arquivo, o nó já tem o arquivo e vira seeder
-    def instanciar_sessao(self, torrent, caminho_arquivo=None, tracker=None):
+    def instanciar_sessao(self, torrent, caminho_arquivo=None, tracker=None, guardioes=()):
         nova_sessao = Sessao.Sessao(torrent, self.peer_id)
         nova_sessao.chave = self.chave
+        nova_sessao.guardioes = list(guardioes) # Vão no primeiro announce
         if tracker:
             nova_sessao.tracker = tracker
         if caminho_arquivo:

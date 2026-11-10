@@ -17,5 +17,7 @@ def url_encode(sessao:Sessao, porta, peer_id, event=""):
     }
     if event:
         params.update({"event": event})
+    if sessao.guardioes: # O Tracker registra quem guarda as partes da chave do arquivo
+        params["guardioes"] = b"".join(sessao.guardioes)
         
     return path + urlencode(params) # Concatena as duas strings
