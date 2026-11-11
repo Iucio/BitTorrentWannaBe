@@ -1,4 +1,4 @@
-import Cliente, os, sys
+import Cliente, os, sys, painel
 from pathlib import Path
 from servicos.torrent_reader import ler_torrent
 from servicos.cifra import ler_parte, decifrar_com_partes
@@ -35,7 +35,10 @@ cliente = Cliente.Cliente(chave, tracker)
 # Faz o announce e recebe os peers do Tracker
 sessao = cliente.instanciar_sessao(spyxfamily, tracker=tracker)
 
-sessao.download()
+# Baixa mostrando o painel, que fecha sozinho no fim (PAINEL=0 desliga o painel)
+if not painel.acompanhar(cliente, sessao, "baixar"):
+    cliente.shutdown()
+    sys.exit("download interrompido")
 
 # Pede as partes antes do shutdown: o guardião só entrega pra quem ainda está no swarm
 partes = []
