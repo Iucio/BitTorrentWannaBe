@@ -6,21 +6,33 @@ registro de atividade. Usa só a biblioteca padrão do Python e não altera
 nenhum outro arquivo do cliente: tudo o que o cliente imprime vira o log
 do painel.
 
-Uso (de dentro da pasta Cliente):
+As demos já abrem o painel sozinhas (seeder_demo.py, leecher_demo.py e
+cliente_demo.py). Ele aparece depois das perguntas iniciais (como a escolha
+dos guardiões) e fecha com q ou Ctrl+C; a demo então continua no terminal
+normal. PAINEL=0 desliga e volta às mensagens de antes.
+
+Dentro de outro programa:
+    import painel
+    painel.acompanhar(cliente, sessao, "semear")   # até apertar q
+    painel.acompanhar(cliente, sessao, "baixar")   # roda o download e volta ao terminar
+    painel.acompanhar(cliente, None, "guardiao")   # cliente sem arquivo, só guardião
+
+Também roda sozinho (de dentro da pasta Cliente):
     python3 painel.py semear [arquivo] [torrent]   compartilha um arquivo
     python3 painel.py baixar [torrent]             baixa um arquivo
+Sem os caminhos, usa o vídeo da demonstração.
 
-Sem os caminhos, usa o vídeo da demonstração, como os *_demo.py.
-
-Variáveis de ambiente (as mesmas das demos):
+Variáveis de ambiente:
     TRACKER_URL    endereço do Tracker (padrão http://127.0.0.1:6969)
     TRACKER_CHAVE  chave de acesso dada por ./tracker cadastrar
     NO_COLOR       com qualquer valor, desliga as cores
+    PAINEL         0 desliga o painel nas demos
 
 Teclas: [q] sai   [l] liga e desliga o lockdown (se a versão do cliente tiver)
 """
 
 import collections
+import contextlib
 import os
 import re
 import shutil
@@ -287,10 +299,12 @@ class Painel:
     def _estado(self, completo):
         if self.falha:
             return ("FALHOU", "erro")
-        if self.sessao is None:
-            return ("CONECTANDO", "aviso")
         if getattr(self.sessao, "_lockdown", False) or getattr(self.cliente, "lockdown", False):
             return ("LOCKDOWN", "aviso")
+        if self.modo == "guardiao":
+            return ("NA REDE", "ok")
+        if self.sessao is None:
+            return ("CONECTANDO", "aviso")
         if self.modo == "semear":
             return ("SEMEANDO", "ok")
         if completo:
@@ -333,14 +347,40 @@ class Painel:
             texto_esquerda = "".join(t for t, _ in esquerda)
             return esquerda + [(" " * max(1, coluna - len(texto_esquerda)), None)] + direita
 
-        return caixa("cliente", [
+        linhas = [
             linha(par("peer_id", peer_id), par("porta", porta)),
             linha(par("tracker", self.tracker), par("chave", chave, "ok" if self.chave else "aviso")),
             linha(par("no ar ha", relogio(time.time() - self.inicio)), par("modo", self.modo)),
-        ], largura)
+        ]
+        guardadas = self._partes_guardadas()
+        if guardadas is not None and self.modo != "guardiao":
+            linhas.append(par("guardiao", f"{len(guardadas)} parte(s) de chave guardada(s)"))
+        return caixa("cliente", linhas, largura)
+
+    def _partes_guardadas(self):
+        """Partes da chave (Shamir) que outros seeders confiaram a este cliente; None se não é guardião."""
+        guardiao = getattr(self.cliente, "guardiao", None)
+        if guardiao is None:
+            return None
+        with guardiao.lock:
+            return dict(guardiao.partes)
+
+    def _caixa_guardiao(self, largura):
+        guardadas = self._partes_guardadas() or {}
+        linhas = [[("na SALA: qualquer seeder pode escolher este cliente para guardar uma parte da chave", "rotulo")],
+                  [],
+                  [("partes guardadas ", "rotulo"), (str(len(guardadas)), "valor")]]
+        for info_hash, (x, _) in list(guardadas.items())[:6]:  # o y é o segredo: não aparece
+            x = str(x) if len(str(x)) <= 12 else str(x)[:12] + "..."
+            linhas.append([("  * ", "ok"), (f"arquivo {info_hash.hex()[:8]}", "valor"), (f"   parte x = {x}", "rotulo")])
+        if len(guardadas) > 6:
+            linhas.append([(f"  ... e mais {len(guardadas) - 6}", "rotulo")])
+        return caixa("guardiao", linhas, largura, self._estado(False))
 
     def _caixa_sessao(self, largura, linhas_livres):
         interno = largura - 4
+        if self.modo == "guardiao":
+            return self._caixa_guardiao(largura)
         if self.sessao is None:
             texto = f"falha: {self.falha}" if self.falha else f"anunciando no tracker {self.tracker} ..."
             return caixa("sessao", [[(texto, "erro" if self.falha else "aviso")]], largura,
@@ -377,6 +417,10 @@ class Painel:
         linhas.append([("tracker ", "rotulo"),
                        (f"{self.sessao.complete} seeder(s), {self.sessao.incomplete} leecher(s), "
                         f"{len(set(self.sessao.swarm))} peer(s) na lista", "valor")])
+        if "shamir" in info:
+            linhas.append([("cifrado ", "rotulo"),
+                           (f"AES-GCM, chave dividida em {info['shamir']['n']} partes "
+                            f"(abre com {info['shamir']['k']})", "aviso")])
         linhas.append([])
 
         # Mapa de peças: cada caractere é uma peça (ou um grupo, se o arquivo for grande)
@@ -503,6 +547,91 @@ class Painel:
 # Programa
 # ---------------------------------------------------------------------------
 
+@contextlib.contextmanager
+def _tela(painel):
+    """Enquanto o painel está aberto, o que o cliente imprime vai para o log e o
+    terminal usa a tela alternativa. Ao sair, tudo volta como estava."""
+    if os.name == "nt":
+        os.system("")  # liga as sequências de cor e cursor no console do Windows
+    antigos = sys.stdout, sys.stderr
+    sys.stdout = sys.stderr = painel.registro
+    painel.saida.write("\x1b[?1049h\x1b[?25l")  # tela alternativa e cursor escondido
+    try:
+        with Teclado() as teclado:
+            yield teclado
+    finally:
+        sys.stdout, sys.stderr = antigos
+        painel.saida.write("\x1b[?25h\x1b[?1049l")
+        painel.saida.flush()
+
+
+def _laco(painel, teclado, voltar_ao_concluir=False):
+    """Redesenha e lê o teclado. False se o usuário saiu (q ou Ctrl+C);
+    True se o download terminou (só com voltar_ao_concluir)."""
+    concluido_em = None
+    try:
+        while True:
+            painel.desenhar()
+            fim = time.time() + 1 / QUADROS_POR_SEGUNDO
+            while time.time() < fim:
+                caractere = teclado.ler()
+                if caractere and not painel.tecla(caractere):
+                    return False
+                time.sleep(0.02)
+            terminou = painel.thread_download is not None and not painel.thread_download.is_alive()
+            if voltar_ao_concluir and terminou:
+                concluido_em = concluido_em or time.time()
+                painel.aviso = "download terminado, continuando..."
+                if time.time() - concluido_em > 2:  # deixa ver o 100% antes de fechar
+                    return True
+    except KeyboardInterrupt:
+        return False
+
+
+def _desligado():
+    return os.environ.get("PAINEL") == "0" or not sys.stdout.isatty()
+
+
+def acompanhar(cliente, sessao=None, modo="semear"):
+    """Mostra o painel enquanto o cliente trabalha e devolve o controle a quem chamou.
+
+    modo "semear":   fica aberto até apertar q ou Ctrl+C.
+    modo "baixar":   roda sessao.download() e fecha sozinho quando o download termina.
+    modo "guardiao": cliente sem arquivo, guardando partes da chave; fica até q ou Ctrl+C.
+
+    Retorna True se o download terminou (no modo baixar) e False se o usuário saiu.
+    Não chama cliente.shutdown(): isso continua com quem chamou.
+    Com PAINEL=0 (ou sem terminal), faz o mesmo de antes, sem desenhar nada.
+    """
+    if _desligado():
+        if modo == "baixar":
+            sessao.download()
+            return True
+        try:
+            while True:
+                time.sleep(0.25)
+        except KeyboardInterrupt:
+            return False
+
+    tracker = getattr(sessao, "tracker", None) or getattr(getattr(cliente, "guardiao", None), "tracker", "") or ""
+    painel = Painel(modo, tracker, getattr(cliente, "chave", ""), Registro(), sys.stdout)
+    painel.cliente, painel.sessao = cliente, sessao
+    with _tela(painel) as teclado:
+        if modo == "baixar":
+            painel.thread_download = threading.Thread(target=sessao.download, daemon=True)
+            painel.thread_download.start()
+        resultado = _laco(painel, teclado, voltar_ao_concluir=(modo == "baixar"))
+    if modo == "baixar":
+        concluiu = len(painel._pecas_que_tem()) == sessao.qtd_pecas
+        print("[BitTorrentWannaBe] download concluido" if concluiu else "[BitTorrentWannaBe] download interrompido")
+        return concluiu
+    return resultado
+
+
+# ---------------------------------------------------------------------------
+# Rodando sozinho: python3 painel.py semear|baixar
+# ---------------------------------------------------------------------------
+
 def criar_cliente(chave):
     try:
         return Cliente.Cliente(chave)
@@ -534,44 +663,26 @@ def main():
     tracker = os.environ.get("TRACKER_URL", "http://127.0.0.1:6969")
     chave = os.environ.get("TRACKER_CHAVE", "")
     torrent = ler_torrent(caminho_torrent)
+    painel = Painel(modo, tracker, chave, Registro(), sys.stdout)
 
-    if os.name == "nt":
-        os.system("")  # liga as sequências de cor e cursor no console do Windows
-    saida = sys.stdout
-    registro = Registro()
-    painel = Painel(modo, tracker, chave, registro, saida)
-
-    sys.stdout = sys.stderr = registro
-    saida.write("\x1b[?1049h\x1b[?25l")  # tela alternativa e cursor escondido
-    try:
-        with Teclado() as teclado:
+    with _tela(painel) as teclado:
+        painel.desenhar()
+        try:
+            painel.cliente = criar_cliente(chave)
             painel.desenhar()
-            try:
-                painel.cliente = criar_cliente(chave)
-                painel.desenhar()
-                painel.sessao = painel.cliente.instanciar_sessao(torrent, arquivo, tracker)
-            except SystemExit as erro:  # o Cliente encerra quando o Tracker recusa
-                painel.falha = str(erro.code)
-            except Exception as erro:
-                painel.falha = f"{type(erro).__name__}: {erro}"
+            painel.sessao = painel.cliente.instanciar_sessao(torrent, arquivo, tracker)
+        except SystemExit as erro:  # o Cliente encerra quando o Tracker recusa
+            painel.falha = str(erro.code)
+        except Exception as erro:
+            painel.falha = f"{type(erro).__name__}: {erro}"
 
-            if painel.sessao is not None and modo == "baixar":
-                painel.thread_download = threading.Thread(target=painel.sessao.download, daemon=True)
-                painel.thread_download.start()
-            if painel.falha:
-                painel.aviso = "aperte q para sair"
+        if painel.sessao is not None and modo == "baixar":
+            painel.thread_download = threading.Thread(target=painel.sessao.download, daemon=True)
+            painel.thread_download.start()
+        if painel.falha:
+            painel.aviso = "aperte q para sair"
+        _laco(painel, teclado)
 
-            rodando = True
-            while rodando:
-                painel.desenhar()
-                fim = time.time() + 1 / QUADROS_POR_SEGUNDO
-                while rodando and time.time() < fim:
-                    caractere = teclado.ler()
-                    rodando = painel.tecla(caractere) if caractere else True
-                    time.sleep(0.02)
-    except KeyboardInterrupt:
-        pass
-    finally:
         if painel.cliente is not None and painel.sessao is not None:
             painel.aviso = "desligando: avisando o tracker..."
             painel.desenhar()
@@ -579,14 +690,8 @@ def main():
                 painel.cliente.shutdown()  # announce com event=stopped
             except Exception:
                 pass
-        sys.stdout, sys.stderr = saida, sys.__stderr__
-        saida.write("\x1b[?25h\x1b[?1049l")
-        saida.flush()
 
-    if painel.falha:
-        print(f"BitTorrentWannaBe: {painel.falha}")
-    else:
-        print("BitTorrentWannaBe: sessao encerrada.")
+    print(f"BitTorrentWannaBe: {painel.falha}" if painel.falha else "BitTorrentWannaBe: sessao encerrada.")
 
 
 if __name__ == "__main__":

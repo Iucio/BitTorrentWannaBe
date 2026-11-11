@@ -1,4 +1,4 @@
-import Cliente, os, time
+import Cliente, os, painel
 
 # python3 cliente_demo.py
 # Cliente ligado na rede sem arquivo nenhum. Fica na SALA, então qualquer seeder
@@ -10,8 +10,6 @@ chave = os.environ.get("TRACKER_CHAVE", "") # ./tracker cadastrar <nome> mostra 
 cliente = Cliente.Cliente(chave, tracker)
 print(f"[BitTorrentWannaBe] Na rede como {cliente.peer_id.decode('latin1')}. Ctrl+C para sair")
 
-try:
-    while True:
-        time.sleep(0.25)
-except KeyboardInterrupt:
-    cliente.shutdown() # Sai da SALA
+# Fica na rede mostrando o painel até apertar q ou Ctrl+C (PAINEL=0 desliga o painel)
+painel.acompanhar(cliente, None, "guardiao")
+cliente.shutdown() # Sai da SALA

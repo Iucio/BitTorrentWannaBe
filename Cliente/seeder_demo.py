@@ -1,9 +1,8 @@
-import Cliente, os, sys
+import Cliente, os, sys, painel
 from pathlib import Path
 from servicos.torrent_reader import ler_torrent
 from servicos.cifra import ler_parte
 from servicos.partes import SALA, consultar, entregar_parte
-import time
 
 # python3 seeder_demo.py [arquivo] [torrent] [partes...]
 # sem argumento arquivo e torrent são o vídeo da demo
@@ -58,9 +57,6 @@ for guardiao, parte in zip(escolhidos, partes):
     else:
         print(f"[Seeder] {guardiao['peer_id']} não confirmou a parte")
 
-# Compartilha até o usuário apertar Ctrl+C
-try:
-    while True:
-        time.sleep(0.25)
-except KeyboardInterrupt:
-    cliente.shutdown() # Envia event=stopped ao Tracker
+# Compartilha mostrando o painel até apertar q ou Ctrl+C (PAINEL=0 desliga o painel)
+painel.acompanhar(cliente, sessao, "semear")
+cliente.shutdown() # Envia event=stopped ao Tracker
