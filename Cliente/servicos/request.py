@@ -7,6 +7,7 @@ def request_tracker(url):
         falha = False
         try:
             resposta = http.request("GET", url) 
+            break
         except:
             time.sleep(1) # Espera 1 segundo antes de tentar novamente
             falha = True
@@ -15,4 +16,3 @@ def request_tracker(url):
     if falha:
         return False
     return resposta.json() # Transforma em dicionário
-
