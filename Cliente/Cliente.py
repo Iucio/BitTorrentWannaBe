@@ -18,9 +18,7 @@ class Cliente:
         t.Thread(target=self._aceitar_peers, daemon=True).start() # Atende outros peers em segundo plano
         if tracker:
             self.guardiao = Guardiao(self, tracker)
-            resposta = self.guardiao.anunciar(Event.STARTED)
-            if "failure_reason" in resposta:
-                sys.exit(f"[BitTorrentWannaBe] Tracker recusou: {resposta['failure_reason']}")
+            self.guardiao.anunciar(Event.STARTED)
 
 
     def add_sessao(self, torrent):
@@ -87,8 +85,6 @@ class Cliente:
             nova_sessao.carregar_arquivo(caminho_arquivo)
         self.sessoes[nova_sessao.info_hash] = nova_sessao
         resposta = self.announce(nova_sessao.info_hash) # Primeiro announce (event=started) já traz o swarm e leva os guardiões
-        if "failure_reason" in resposta:
-            sys.exit(f"[BitTorrentWannaBe] Tracker recusou: {resposta['failure_reason']}")
         beat = t.Thread(target=self.heartbeat, args=(tracker,), daemon=True)
         beat.start()
         return nova_sessao
@@ -97,9 +93,10 @@ class Cliente:
     def announce(self, info_hash):
         sessao = self.sessoes[info_hash]
         resposta = sessao.announce(self.porta, self.peer_id, sessao.event)
-        if not resposta:
+        if "failure reason" in resposta:
             self._lockdown()
-        sessao.atualizar_dados_tracker(resposta)
+        else:
+            sessao.atualizar_dados_tracker(resposta)
         return resposta
 
     def _recuperacao(self):
@@ -109,13 +106,14 @@ class Cliente:
 
     def heartbeat(self, tracker):
         print("[BitTorrentWannaBe] Iniciando heartbeat...")
-        while request_tracker(tracker):
+        while not self.lockdown and request_tracker(tracker):
             time.sleep(15)
-        print("[BitTorrentWannaBe] Falha no Tracker, iniciando lockdown...")
-        self._lockdown()
+        if not self.lockdown:
+            print("[BitTorrentWannaBe] Falha no Tracker, iniciando lockdown...")
+            self._lockdown()
         print("[BitTorrentWannaBe] Testando Tracker novamente...")
         resposta = request_tracker(tracker)
-        if resposta:
+        if not "failure reason" in resposta:
             self._recuperacao()
             return None
         
@@ -124,6 +122,7 @@ class Cliente:
         exit(1)
 
     def _lockdown(self):
+        self.lockdown = True
         for sessao in self.sessoes.values():
             print(f"[BitTorrentWannaBe] congelando sessoes {sessao.info_hash}")
             sessao.lockdown(True)

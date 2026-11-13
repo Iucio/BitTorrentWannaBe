@@ -41,7 +41,7 @@ class Guardiao:
                   "left": 0, "chave": self.cliente.chave}
         if evento:
             params["event"] = evento
-        return request_tracker(f"{self.tracker}/announce?" + urlencode(params))
+        return request_tracker(f"{self.tracker}/announce?" + urlencode(params), False)
 
     # Única regra de quem recebe a parte. Regras personalizadas entram aqui
     def pode_entregar(self, info_hash, peer_id, ip):

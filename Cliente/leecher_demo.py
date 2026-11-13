@@ -1,4 +1,4 @@
-import Cliente, os, sys, painel
+import Cliente, os, sys, painel, time
 from pathlib import Path
 from servicos.torrent_reader import ler_torrent
 from servicos.cifra import ler_parte, decifrar_com_partes
@@ -36,9 +36,7 @@ cliente = Cliente.Cliente(chave, tracker)
 sessao = cliente.instanciar_sessao(spyxfamily, tracker=tracker)
 
 # Baixa mostrando o painel, que fecha sozinho no fim (PAINEL=0 desliga o painel)
-if not painel.acompanhar(cliente, sessao, "baixar"):
-    cliente.shutdown()
-    sys.exit("download interrompido")
+painel.acompanhar(cliente, sessao, "baixar")
 
 # Pede as partes antes do shutdown: o guardião só entrega pra quem ainda está no swarm
 partes = []
@@ -51,10 +49,6 @@ if cifrado:
         else:
             print(f"[Leecher] {guardiao['peer_id']} não entregou a parte")
     partes = list(dict.fromkeys(partes + partes_arquivo)) # sem repetidas
-
-# Desligamento da aplicação
-# Envia announces contendo o campo event=stopped para cada sessao (info_hash)
-cliente.shutdown()
 
 # Abre o arquivo baixado com as partes da chave
 if cifrado:
