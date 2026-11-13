@@ -31,9 +31,9 @@ Na Rodada 2 foi entregue um MVP funcional com:
 - funcionamento de Seeder e Leecher;
 - testes de Bencode, Tracker e mensagens P2P.
 
-### Pendente
+### Depois da Rodada 2
 
-- cadastro e autorização de clientes na rede.
+- cadastro e autorização de clientes na rede: só entra quem tem chave de acesso (ver [Acesso à rede](#acesso-à-rede)).
 
 ---
 
@@ -116,12 +116,31 @@ Os principais artefatos estão disponíveis em `documentos/`:
 
 ---
 
+## Acesso à rede
+
+Só entra na rede quem foi cadastrado no Tracker. O admin cadastra cada cliente na máquina do Tracker e entrega a chave mostrada:
+
+```bash
+./tracker cadastrar "PC-Lab-03"
+```
+
+O cliente manda essa chave em todo announce, pela variável `TRACKER_CHAVE` (dentro de `Cliente/`):
+
+```bash
+TRACKER_CHAVE=<chave> python3 seeder_demo.py <arquivo> <torrent>
+TRACKER_CHAVE=<chave> python3 leecher_demo.py <torrent>
+```
+
+Sem chave, com chave errada ou revogada (`./tracker revogar <id>`), o Tracker recusa e o cliente encerra com `Tracker recusou: ...`. Detalhes em [Tracker/README.md](Tracker/README.md#cadastro-de-clientes).
+
+---
+
 ## Fluxo demonstrado
 
 ```text
 Seeder
   |
-  | announce
+  | announce (com a chave)
   v
 Tracker
   |

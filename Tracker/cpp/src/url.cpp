@@ -23,6 +23,17 @@ std::optional<std::int64_t> ler_int(const std::string& s) {
     return v;
 }
 
+std::optional<std::string> ler_info_hash(std::string valor) {
+    if (valor.size() != 20) {
+        auto de_novo = percent_decode(valor);
+        if (de_novo) valor = *de_novo;
+    }
+    if (valor.size() != 20) return std::nullopt;
+    return valor;
+}
+
+bool chave_valida(const std::string& chave) { return !chave.empty() && chave.size() <= 64; }
+
 } // namespace
 
 std::optional<std::string> percent_decode(const std::string& s) {
@@ -69,19 +80,15 @@ std::variant<AnnounceRequest, std::string> ler_announce(const std::string& query
     if (!params_opt) return std::string("url mal formada");
     auto& params = *params_opt;
 
-    for (const char* obrigatorio : {"info_hash", "peer_id", "port", "left"}) {
+    for (const char* obrigatorio : {"info_hash", "peer_id", "port", "left", "chave"}) {
         if (!params.count(obrigatorio)) return std::string("parametro ausente: ") + obrigatorio;
     }
 
     AnnounceRequest req;
 
-    // se ainda não tiver 20 bytes, decodifica de novo
-    req.info_hash = params["info_hash"];
-    if (req.info_hash.size() != 20) {
-        auto de_novo = percent_decode(req.info_hash);
-        if (de_novo) req.info_hash = *de_novo;
-    }
-    if (req.info_hash.size() != 20) return std::string("info_hash deve ter 20 bytes");
+    auto info_hash = ler_info_hash(params["info_hash"]);
+    if (!info_hash) return std::string("info_hash deve ter 20 bytes");
+    req.info_hash = *info_hash;
 
     req.peer_id = params["peer_id"];
     if (req.peer_id.size() != 20) return std::string("peer_id deve ter 20 bytes");
@@ -115,9 +122,39 @@ std::variant<AnnounceRequest, std::string> ler_announce(const std::string& query
     else if (evento == "stopped") req.evento = Evento::Stopped;
     else return std::string("event invalido");
 
+    req.chave = params["chave"];
+    if (!chave_valida(req.chave)) return std::string("chave invalida");
+
+    // peer_ids dos guardiões colados um no outro, 20 bytes cada (como os peers compactos do BitTorrent)
+    if (params.count("guardioes")) {
+        const std::string& valor = params["guardioes"];
+        if (valor.empty() || valor.size() % 20 != 0 || valor.size() > 20 * 50)
+            return std::string("guardioes invalido");
+        for (std::size_t i = 0; i < valor.size(); i += 20) req.guardioes.push_back(valor.substr(i, 20));
+    }
+
     // não confia no ip da url: daria pra colocar o ip de outra máquina no swarm
     req.ip = ip_remetente;
     return req;
+}
+
+std::variant<ConsultaPeers, std::string> ler_consulta_peers(const std::string& query) {
+    auto params_opt = parse_query(query);
+    if (!params_opt) return std::string("url mal formada");
+    auto& params = *params_opt;
+
+    for (const char* obrigatorio : {"info_hash", "chave"}) {
+        if (!params.count(obrigatorio)) return std::string("parametro ausente: ") + obrigatorio;
+    }
+
+    ConsultaPeers consulta;
+    auto info_hash = ler_info_hash(params["info_hash"]);
+    if (!info_hash) return std::string("info_hash deve ter 20 bytes");
+    consulta.info_hash = *info_hash;
+
+    consulta.chave = params["chave"];
+    if (!chave_valida(consulta.chave)) return std::string("chave invalida");
+    return consulta;
 }
 
 } // namespace tracker

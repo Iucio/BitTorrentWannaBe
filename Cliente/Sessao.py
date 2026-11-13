@@ -14,6 +14,8 @@ class Sessao:
         self.private = torrent["private"] # Define se o arquivo é privado ou não
         self.torrent = torrent # Dicionário do .torrent 
         self.peer_id = peer_id # Identificador do nó na rede
+        self.chave = "" # Chave de acesso do cliente, vai em todo announce
+        self.guardioes = [] # peer_ids que o seeder escolheu pra guardar as partes da chave
         self.uploaded = uploaded # Quantos bytes foram compartilhados na rede pelo nó
         self.downloaded = downloaded # Quantos bytes o nó baixou da rede
         self._lockdown = False
@@ -40,7 +42,7 @@ class Sessao:
 
     # Atualizar dados interos através da resposta do Tracker
     def atualizar_dados_tracker(self, dados_tracker:dict):
-        if "failure_reason" in dados_tracker: # Tracker recusou o announce, nada muda
+        if "failure reason" in dados_tracker: # Tracker recusou o announce, nada muda
             return False
         self.interval = dados_tracker["interval"]
         self.min_interval = dados_tracker["min_interval"]
@@ -52,6 +54,8 @@ class Sessao:
 
     def announce(self, porta, peer_id, event): # informações que ficam no Cliente
         url = url_encode(self, porta, peer_id, event)
+        if event == Event.STOPPED:
+            return request_tracker(url, False)
         return request_tracker(url) # Dicionário contendo a resposta do Tracker
 
     # Caminho do download -> LEECHER
@@ -62,9 +66,12 @@ class Sessao:
         thread_orquestador = threading.Thread(target=gerenciador.orquestrador, daemon=True)
         thread_orquestador.start()
         
-        barra = progressbar.ProgressBar(max_value=gerenciador.total_pecas)
+        barra = progressbar.ProgressBar(maxval=gerenciador.total_pecas)
         while len(gerenciador.pecas_baixadas) < gerenciador.total_pecas:
-            barra.update(len(gerenciador.pecas_baixadas))
+            try:
+                barra.update(len(gerenciador.pecas_baixadas))
+            except:
+                continue
             time.sleep(0.25)
             if self._shutdown:
                 exit(1)

@@ -22,6 +22,14 @@ struct AnnounceRequest {
     std::int64_t left = 0;
     Evento evento = Evento::Nenhum;
     int numwant = 50;
+    std::string chave;
+    std::vector<std::string> guardioes; // peer_ids que o seeder escolheu pra guardar as partes da chave
+};
+
+// GET /peers e /guardioes: consultas sobre um arquivo, sem entrar no swarm dele
+struct ConsultaPeers {
+    std::string info_hash; // 20 bytes
+    std::string chave;
 };
 
 struct Peer {
@@ -43,6 +51,15 @@ struct AnnounceResponse {
     int complete = 0;   // seeders
     int incomplete = 0; // leechers
     std::vector<Peer> peers;
+};
+
+// Cliente cadastrado pelo admin: precisa da chave pra entra na rede
+struct Cliente {
+    std::int64_t id = 0;
+    std::string nome;
+    std::string chave;      // chave de acesso, manda no announce
+    bool ativo = true;      // false = revogado
+    Segundos criado_em = 0; // timestamp
 };
 
 } // namespace tracker

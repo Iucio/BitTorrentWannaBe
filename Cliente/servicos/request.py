@@ -1,18 +1,20 @@
 import urllib3, time
 
 
-def request_tracker(url): 
+def request_tracker(url,tentar_novamente=True): 
     http = urllib3.PoolManager()
     for _ in range(3):
         falha = False
         try:
             resposta = http.request("GET", url) 
+            break
         except:
-            time.sleep(1) # Espera 1 segundo antes de tentar novamente
             falha = True
+            if not tentar_novamente:
+                break
             print(f"[BitTorrentWannaBe] Tracker falhou, tentando novamente...")
             continue
+            
     if falha:
-        return False
+        return "failure reason"
     return resposta.json() # Transforma em dicionário
-

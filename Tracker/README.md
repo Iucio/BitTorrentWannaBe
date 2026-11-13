@@ -21,6 +21,10 @@ O Tracker não armazena nem transfere nenhum fragmento de arquivo: ele apenas in
 - Expiração de peers que pararam de enviar announce
 - Sorteio e limite (`numwant`) da lista de peers devolvida
 - Resposta em JSON
+- Cadastro de clientes com chave de acesso, listagem e revogação, pela linha de comando
+- Só cliente cadastrado e não revogado faz announce (parâmetro `chave`)
+- Rotas `/peers` (o swarm inteiro, sem registrar quem pergunta) e `/guardioes` (quem guarda as partes da chave de um arquivo)
+- Registro dos guardiões escolhidos pelo seeder no announce (parâmetro `guardioes`)
 
 
 ## Tecnologias
@@ -56,6 +60,19 @@ cd Tracker/cpp
 g++ -std=c++17 -O2 src/*.cpp -o tracker -lsqlite3
 ```
 
+### No Windows
+
+Precisa do MinGW-w64 (`g++`), do `cmake` e do `ninja` (o MinGW da WinLibs já traz os três). Se o SQLite não estiver instalado, o CMake baixa o código oficial na primeira compilação (precisa de internet):
+
+```powershell
+cd Tracker\cpp
+cmake -S . -B build -G Ninja
+cmake --build build
+build\tracker.exe 6969
+```
+
+Na primeira execução o Windows pergunta se libera o `tracker.exe` no firewall; libere no tipo da rede em uso (privada ou pública) para outras máquinas conseguirem acessar.
+
 ## Como executar
 
 ```bash
@@ -69,7 +86,7 @@ A porta padrão é a `80`, contudo, portas abaixo de 1024 exigem `sudo`, então 
 ```
 *Arbritario esse número
 
-O segundo argumento é o arquivo do banco SQLite (padrão `tracker.db`, na pasta de onde o Tracker foi executado). Se não existir, é criado com a tabela vazia. Os peers gravados continuam lá depois de reiniciar o Tracker, e os que passaram do prazo de expiração são removidos no próximo announce.
+O segundo argumento é o arquivo do banco SQLite (padrão `tracker.db`, na pasta de onde o Tracker foi executado). Se não existir, é criado com as tabelas vazias. Os peers gravados continuam lá depois de reiniciar o Tracker, e os que passaram do prazo de expiração são removidos no próximo announce.
 
 Cada requisição atendida aparece no terminal:
 
@@ -79,9 +96,28 @@ Cada requisição atendida aparece no terminal:
 [tracker] 127.0.0.1 GET /announce -> 200
 ```
 
+### Cadastro de clientes
+
+Só quem tem acesso à máquina do Tracker cadastra clientes: não existe rota de cadastro na rede. A chave é sorteada pelo próprio Tracker (32 caracteres hexadecimais) e o admin entrega ela ao cliente.
+
+```bash
+./tracker cadastrar "PC-Lab-03" [banco]   # mostra o id e a chave
+./tracker clientes [banco]                # lista id, situação, data do cadastro e nome
+./tracker revogar 3 [banco]               # o cadastro continua, marcado como revogado
+```
+
+```text
+cliente 3 cadastrado: PC-Lab-03
+chave de acesso: 9f2c41e8a0b7d35c6e14f0a2b8c97d61
+```
+
+Os comandos usam o mesmo `tracker.db` do servidor (ou o banco passado no fim) e podem rodar com o servidor ligado.
+
+O cliente manda a chave em todo announce (parâmetro `chave`, ver [Rota `/announce`](#rota-announce)). Chave que não existe ou foi revogada é recusada com `cliente nao autorizado`, inclusive no `stopped`, então quem não está cadastrado também não tira peers da rede. Nos demos do cliente, a chave vai na variável `TRACKER_CHAVE`.
+
 ## Rota `/announce`
 
-`GET /announce?info_hash=...&peer_id=...&port=...&left=...`
+`GET /announce?info_hash=...&peer_id=...&port=...&left=...&chave=...`
 
 | Parâmetro    | Obrigatório | Descrição |
 |--------------|-------------|-----------|
@@ -89,16 +125,18 @@ Cada requisição atendida aparece no terminal:
 | `peer_id`    | sim | Identificador do cliente, 20 bytes |
 | `port`       | sim | Porta em que o cliente aceita conexões de outros peers |
 | `left`       | sim | Bytes que ainda faltam baixar (`0` = seeder) |
+| `chave`      | sim | Chave de acesso do cliente (`./tracker cadastrar`), até 64 caracteres |
 | `uploaded`   | não | Total de bytes enviados |
 | `downloaded` | não | Total de bytes baixados |
 | `event`      | não | `started`, `completed` ou `stopped`; omitido no announce de rotina |
 | `numwant`    | não | Quantidade de peers desejada (padrão 50, máximo 50) |
 | `ip`         | não | Ignorado: o Tracker divulga sempre o IP de quem conectou |
+| `guardioes`  | não | `peer_id`s dos guardiões das partes da chave, colados um no outro (20 bytes cada, até 50). Ver [Rotas `/peers` e `/guardioes`](#rotas-peers-e-guardioes) |
 
-Exemplo com `curl`:
+Exemplo com `curl` (a chave precisa estar cadastrada):
 
 ```bash
-curl "http://127.0.0.1:5023/announce?info_hash=%C8%C9%CA%CB%CC%CD%CE%CF%D0%D1%D2%D3%D4%D5%D6%D7%D8%D9%DA%DB&peer_id=-UF0001-abcdefghijkl&port=6881&left=0&event=started"
+curl "http://127.0.0.1:5023/announce?info_hash=%C8%C9%CA%CB%CC%CD%CE%CF%D0%D1%D2%D3%D4%D5%D6%D7%D8%D9%DA%DB&peer_id=-UF0001-abcdefghijkl&port=6881&left=0&event=started&chave=9f2c41e8a0b7d35c6e14f0a2b8c97d61"
 ```
 
 ## Resposta
@@ -130,10 +168,24 @@ Erro:
 
 | Status | Quando |
 |--------|--------|
-| `200` + `failure_reason` | Regra do tracker violada (ex.: announce antes do `min_interval`) |
-| `400` | Parâmetro ausente ou inválido, URL mal formada |
+| `200` + `failure_reason` | Regra do tracker violada (ex.: `cliente nao autorizado`, announce antes do `min_interval`, `guardioes ja escolhidos por outro cliente`) |
+| `400` | Parâmetro ausente ou inválido (ex.: `guardioes invalido`), URL mal formada |
 | `404` | Caminho desconhecido |
 | `405` | Método diferente de `GET` |
+
+## Rotas `/peers` e `/guardioes`
+
+São usadas pelas partes da chave do Shamir (ver `Shamir/README.md`). As duas exigem uma chave ativa, não registram quem pergunta e não olham o `min_interval`:
+
+```text
+GET /peers?info_hash=...&chave=...       -> {"interval", "min_interval", "complete", "incomplete", "peers": [...]}
+GET /guardioes?info_hash=...&chave=...   -> {"guardioes": [{"peer_id", "ip", "port"}, ...]}
+```
+
+- `/peers`: **todos** os peers do swarm, sem sorteio nem limite. O guardião usa pra conferir se quem pede a parte está no swarm, e o seeder usa na SALA pra ver quem está ligado
+- `/guardioes`: os guardiões que o seeder escolheu pro arquivo e que estão ligados, com o IP e a porta do announce mais recente deles (em qualquer swarm)
+
+**Escolha dos guardiões**: o seeder manda `guardioes=` no announce `started` do arquivo. O Tracker só acrescenta, nunca tira. Quem escolheu os primeiros guardiões de um arquivo vira o dono dessa lista: outro cliente que mandar `guardioes` pro mesmo arquivo recebe `guardioes ja escolhidos por outro cliente`, e o announce inteiro é recusado. O dono é identificado pelo cadastro (a chave), então continua dono se reiniciar com outro `peer_id`.
 
 ## Configuração
 
@@ -148,7 +200,7 @@ Os valores padrão ficam na struct `Config`, em `src/announce.hpp`:
 
 ## Banco de dados
 
-O Tracker guarda os peers de cada swarm num banco SQLite embutido (`src/repositorio_sqlite.cpp`). O schema fica no início desse arquivo e é criado automaticamente na primeira execução:
+O Tracker guarda num banco SQLite embutido (`src/repositorio_sqlite.cpp`) os peers de cada swarm, os clientes cadastrados e os guardiões de cada arquivo. O schema fica no início desse arquivo e é criado automaticamente na primeira execução. Tabela `peers`:
 
 | Coluna            | Tipo    | Descrição |
 |-------------------|---------|-----------|
@@ -163,7 +215,27 @@ O Tracker guarda os peers de cada swarm num banco SQLite embutido (`src/reposito
 
 A chave primária é `(info_hash, peer_id)`: um arquivo tem vários peers e um peer pode estar em vários arquivos. Como `info_hash` é a primeira coluna da chave, as buscas por arquivo já usam esse índice. `complete` e `incomplete` são calculados a cada announce, não gravados.
 
-A versão do schema fica gravada no próprio arquivo (`PRAGMA user_version`, hoje `2`). Um `tracker.db` criado pela versão anterior, sem `uploaded`/`downloaded`, é atualizado automaticamente ao abrir o Tracker: os peers já gravados são mantidos e as colunas novas começam em zero.
+A tabela `clientes` guarda quem pode entrar na rede (ver [Cadastro de clientes](#cadastro-de-clientes)):
+
+| Coluna      | Tipo    | Descrição |
+|-------------|---------|-----------|
+| `id`        | INTEGER | Número do cliente, usado no `revogar` |
+| `nome`      | TEXT    | Identificação dada no cadastro (não pode ser vazio) |
+| `chave`     | TEXT    | Chave de acesso (única) |
+| `ativo`     | INTEGER | `1` = ativo, `0` = revogado |
+| `criado_em` | INTEGER | Unix timestamp do cadastro |
+
+A tabela `guardioes` guarda quem guarda as partes da chave de cada arquivo (ver [Rotas `/peers` e `/guardioes`](#rotas-peers-e-guardioes)):
+
+| Coluna       | Tipo    | Descrição |
+|--------------|---------|-----------|
+| `info_hash`  | BLOB    | O arquivo (chave, junto com `peer_id`) |
+| `peer_id`    | BLOB    | O guardião escolhido |
+| `cliente_id` | INTEGER | Quem escolheu (o dono da lista), `clientes.id` |
+
+Ela não expira: o guardião desligado continua registrado e só deixa de aparecer no `/guardioes` até fazer announce de novo.
+
+A versão do schema fica gravada no próprio arquivo (`PRAGMA user_version`, hoje `4`). Bancos de versões anteriores são atualizados automaticamente ao abrir o Tracker, mantendo os peers já gravados: o da versão 1 ganha `uploaded`/`downloaded` (começando em zero), o da versão 2 ganha a tabela `clientes` e o da versão 3 ganha a tabela `guardioes`. Depois de atualizado, o banco não abre num Tracker mais antigo.
 
 Para inspecionar o banco (precisa do pacote `sqlite3`):
 
@@ -193,13 +265,17 @@ cd Tracker/cpp/build
 ctest --output-on-failure    # ou ./teste_repositorio
 ```
 
-Os testes rodam a mesma bateria no repositório em memória e no SQLite (inclui `info_hash` com byte nulo, gravação de `uploaded`/`downloaded`, contagem de seeders/leechers, `min_interval`, expiração, persistência depois de fechar o banco e migração de um banco da versão anterior).
+Os testes rodam a mesma bateria no repositório em memória e no SQLite (inclui `info_hash` com byte nulo, gravação de `uploaded`/`downloaded`, contagem de seeders/leechers, `min_interval`, expiração, persistência depois de fechar o banco, cadastro, busca, listagem, revogação e persistência dos clientes, e migração dos bancos das versões 1 e 2).
 
 ## Limitações conhecidas
 
 Esta é uma primeira versão. Pontos ainda em aberto:
 
 - O servidor atende uma conexão por vez (cada uma tem até 5 s para enviar o pedido)
-- Ainda não há controle de acesso: qualquer cliente pode anunciar ou remover peers
+- Um cliente autorizado ainda consegue atualizar ou tirar da rede o peer de outro, se souber o `peer_id` dele
+- Revogar não tira da lista os peers do cliente: eles continuam aparecendo até expirar
+- A chave fica em texto no banco
 - A rota `/teste` é provisória e responde igual à `/announce`
+- O Tracker sabe quem guarda as partes de cada arquivo (não vê as partes): se for invadido, o atacante sabe quem atacar, e ainda precisa de k guardiões
+- Na lista de guardiões vale quem chega primeiro: quem fizer o primeiro announce com `guardioes` de um arquivo vira o dono
 

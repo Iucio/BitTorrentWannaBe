@@ -14,7 +14,17 @@ namespace {
 // buscas por info_hash, que é a primeira coluna dela.
 // uploaded/downloaded: totais da sessão atual do cliente, como ele informa no
 // announce (voltam a zero quando o cliente reinicia).
-const int VERSAO_SCHEMA = 2;
+//
+// Tabela de clientes cadastrados pelo admin. Revogar só marca ativo = 0, o
+// cadastro continua no banco. O UNIQUE da chave já cria o índice da busca por ela.
+// A chave fica em texto. Se der tempo: guardar só o SHA-256 dela, para um
+// tracker.db vazado não entregar a chave de todo mundo.
+//
+// Tabela de guardiões: quem guarda parte da chave de cada arquivo, escolhido pelo
+// seeder no announce. cliente_id é quem escolheu: só ele pode escolher mais.
+// Não expira: a parte continua no disco do guardião, e ele só aparece pro
+// leecher enquanto tiver announce válido em algum swarm.
+const int VERSAO_SCHEMA = 4;
 const char* const SCHEMA = R"sql(
 CREATE TABLE IF NOT EXISTS peers (
     info_hash       BLOB    NOT NULL CHECK (length(info_hash) = 20),
@@ -29,6 +39,24 @@ CREATE TABLE IF NOT EXISTS peers (
 ) WITHOUT ROWID;
 
 CREATE INDEX IF NOT EXISTS idx_peers_expiracao ON peers (ultimo_announce);
+
+CREATE TABLE IF NOT EXISTS clientes (
+    id        INTEGER PRIMARY KEY,
+    nome      TEXT    NOT NULL CHECK (length(nome) > 0),
+    chave     TEXT    NOT NULL UNIQUE,
+    ativo     INTEGER NOT NULL DEFAULT 1 CHECK (ativo IN (0, 1)), -- 0 = revogado
+    criado_em INTEGER NOT NULL                                    -- unix timestamp (s)
+);
+
+CREATE TABLE IF NOT EXISTS guardioes (
+    info_hash  BLOB    NOT NULL CHECK (length(info_hash) = 20),
+    peer_id    BLOB    NOT NULL CHECK (length(peer_id) = 20),
+    cliente_id INTEGER NOT NULL REFERENCES clientes (id),
+    PRIMARY KEY (info_hash, peer_id)
+) WITHOUT ROWID;
+
+-- endereço atual do guardião: busca o peer_id em qualquer swarm
+CREATE INDEX IF NOT EXISTS idx_peers_peer_id ON peers (peer_id);
 )sql";
 
 // Banco criado pela versão 1 (sem uploaded/downloaded): acrescenta as colunas.
@@ -49,6 +77,10 @@ struct UsoStmt {
 
 void ligar_blob(sqlite3_stmt* st, int i, const std::string& bytes) {
     sqlite3_bind_blob(st, i, bytes.data(), static_cast<int>(bytes.size()), SQLITE_TRANSIENT);
+}
+
+void ligar_texto(sqlite3_stmt* st, int i, const std::string& texto) {
+    sqlite3_bind_text(st, i, texto.data(), static_cast<int>(texto.size()), SQLITE_TRANSIENT);
 }
 
 std::string ler_blob(sqlite3_stmt* st, int col) {
@@ -76,6 +108,17 @@ Peer ler_peer(sqlite3_stmt* st) {
     return p;
 }
 
+// colunas na ordem: id, nome, chave, ativo, criado_em
+Cliente ler_cliente(sqlite3_stmt* st) {
+    Cliente c;
+    c.id = sqlite3_column_int64(st, 0);
+    c.nome = ler_texto(st, 1);
+    c.chave = ler_texto(st, 2);
+    c.ativo = sqlite3_column_int(st, 3) != 0;
+    c.criado_em = sqlite3_column_int64(st, 4);
+    return c;
+}
+
 } // namespace
 
 RepositorioSQLite::RepositorioSQLite(const std::string& caminho) {
@@ -86,6 +129,7 @@ RepositorioSQLite::RepositorioSQLite(const std::string& caminho) {
         throw std::runtime_error("nao foi possivel abrir o banco '" + caminho + "': " + msg);
     }
     try {
+        sqlite3_busy_timeout(db_, 2000); // banco ocupado por outro processo: espera até 2 s
         // WAL + NORMAL: cada escrita não força fsync, o announce continua rápido
         executar("PRAGMA journal_mode = WAL;");
         executar("PRAGMA synchronous = NORMAL;");
@@ -109,6 +153,26 @@ RepositorioSQLite::RepositorioSQLite(const std::string& caminho) {
             "FROM peers "
             "WHERE info_hash = ?1;");
         st_expirados_ = preparar("DELETE FROM peers WHERE ultimo_announce < ?1;");
+        st_cadastrar_ = preparar("INSERT INTO clientes (nome, chave, criado_em) VALUES (?1, ?2, ?3);");
+        st_buscar_cliente_ = preparar(
+            "SELECT id, nome, chave, ativo, criado_em "
+            "FROM clientes "
+            "WHERE chave = ?1;");
+        st_listar_clientes_ = preparar(
+            "SELECT id, nome, chave, ativo, criado_em "
+            "FROM clientes "
+            "ORDER BY id;");
+        st_revogar_ = preparar("UPDATE clientes SET ativo = 0 WHERE id = ?1;");
+        st_adicionar_guardiao_ = preparar(
+            "INSERT OR IGNORE INTO guardioes (info_hash, peer_id, cliente_id) VALUES (?1, ?2, ?3);");
+        st_dono_guardioes_ = preparar("SELECT cliente_id FROM guardioes WHERE info_hash = ?1 LIMIT 1;");
+        // com MAX(), o SQLite pega as outras colunas da mesma linha: o announce mais recente
+        st_listar_guardioes_ = preparar(
+            "SELECT p.peer_id, p.ip, p.porta, p.left_bytes, MAX(p.ultimo_announce), "
+            "p.uploaded, p.downloaded "
+            "FROM guardioes g JOIN peers p ON p.peer_id = g.peer_id "
+            "WHERE g.info_hash = ?1 "
+            "GROUP BY p.peer_id;");
     } catch (...) {
         fechar(); // construtor falhou: o destrutor não roda, então libera aqui
         throw;
@@ -118,7 +182,9 @@ RepositorioSQLite::RepositorioSQLite(const std::string& caminho) {
 RepositorioSQLite::~RepositorioSQLite() { fechar(); }
 
 void RepositorioSQLite::fechar() {
-    for (auto** st : {&st_buscar_, &st_salvar_, &st_remover_, &st_listar_, &st_expirados_}) {
+    for (auto** st : {&st_buscar_, &st_salvar_, &st_remover_, &st_listar_, &st_expirados_,
+                      &st_cadastrar_, &st_buscar_cliente_, &st_listar_clientes_, &st_revogar_,
+                      &st_adicionar_guardiao_, &st_dono_guardioes_, &st_listar_guardioes_}) {
         sqlite3_finalize(*st);
         *st = nullptr;
     }
@@ -174,8 +240,74 @@ void RepositorioSQLite::remover_expirados(Segundos limite) {
     if (sqlite3_step(st_expirados_) != SQLITE_DONE) erro("remover_expirados");
 }
 
+std::int64_t RepositorioSQLite::cadastrar_cliente(const std::string& nome, const std::string& chave,
+                                                  Segundos criado_em) {
+    UsoStmt uso{st_cadastrar_};
+    ligar_texto(st_cadastrar_, 1, nome);
+    ligar_texto(st_cadastrar_, 2, chave);
+    sqlite3_bind_int64(st_cadastrar_, 3, criado_em);
+    if (sqlite3_step(st_cadastrar_) != SQLITE_DONE) erro("cadastrar_cliente");
+    return sqlite3_last_insert_rowid(db_);
+}
+
+std::optional<Cliente> RepositorioSQLite::buscar_cliente(const std::string& chave) const {
+    UsoStmt uso{st_buscar_cliente_};
+    ligar_texto(st_buscar_cliente_, 1, chave);
+    const int rc = sqlite3_step(st_buscar_cliente_);
+    if (rc == SQLITE_ROW) return ler_cliente(st_buscar_cliente_);
+    if (rc != SQLITE_DONE) erro("buscar_cliente");
+    return std::nullopt;
+}
+
+std::vector<Cliente> RepositorioSQLite::listar_clientes() const {
+    UsoStmt uso{st_listar_clientes_};
+    std::vector<Cliente> clientes;
+    int rc;
+    while ((rc = sqlite3_step(st_listar_clientes_)) == SQLITE_ROW)
+        clientes.push_back(ler_cliente(st_listar_clientes_));
+    if (rc != SQLITE_DONE) erro("listar_clientes");
+    return clientes;
+}
+
+bool RepositorioSQLite::revogar_cliente(std::int64_t id) {
+    UsoStmt uso{st_revogar_};
+    sqlite3_bind_int64(st_revogar_, 1, id);
+    if (sqlite3_step(st_revogar_) != SQLITE_DONE) erro("revogar_cliente");
+    return sqlite3_changes(db_) > 0; // nenhuma linha alterada = id não existe
+}
+
+void RepositorioSQLite::adicionar_guardiao(const std::string& info_hash, const std::string& peer_id,
+                                           std::int64_t cliente_id) {
+    UsoStmt uso{st_adicionar_guardiao_};
+    ligar_blob(st_adicionar_guardiao_, 1, info_hash);
+    ligar_blob(st_adicionar_guardiao_, 2, peer_id);
+    sqlite3_bind_int64(st_adicionar_guardiao_, 3, cliente_id);
+    if (sqlite3_step(st_adicionar_guardiao_) != SQLITE_DONE) erro("adicionar_guardiao");
+}
+
+std::optional<std::int64_t> RepositorioSQLite::dono_dos_guardioes(const std::string& info_hash) const {
+    UsoStmt uso{st_dono_guardioes_};
+    ligar_blob(st_dono_guardioes_, 1, info_hash);
+    const int rc = sqlite3_step(st_dono_guardioes_);
+    if (rc == SQLITE_ROW) return sqlite3_column_int64(st_dono_guardioes_, 0);
+    if (rc != SQLITE_DONE) erro("dono_dos_guardioes");
+    return std::nullopt;
+}
+
+std::vector<Peer> RepositorioSQLite::listar_guardioes(const std::string& info_hash) const {
+    UsoStmt uso{st_listar_guardioes_};
+    ligar_blob(st_listar_guardioes_, 1, info_hash);
+    std::vector<Peer> peers;
+    int rc;
+    while ((rc = sqlite3_step(st_listar_guardioes_)) == SQLITE_ROW)
+        peers.push_back(ler_peer(st_listar_guardioes_));
+    if (rc != SQLITE_DONE) erro("listar_guardioes");
+    return peers;
+}
+
 // user_version fica gravado no próprio arquivo do banco e diz qual versão do
-// schema ele tem: 0 = banco novo, 1 = sem uploaded/downloaded, 2 = atual.
+// schema ele tem: 0 = banco novo, 1 = sem uploaded/downloaded, 2 = sem a tabela
+// clientes, 3 = sem a tabela guardioes, 4 = atual.
 void RepositorioSQLite::criar_ou_migrar_schema() {
     int versao = 0;
     sqlite3_stmt* st = preparar("PRAGMA user_version;");
@@ -185,9 +317,11 @@ void RepositorioSQLite::criar_ou_migrar_schema() {
     if (versao > VERSAO_SCHEMA)
         throw std::runtime_error("banco criado por uma versao mais nova do Tracker");
 
-    executar("BEGIN;");
+    executar("BEGIN IMMEDIATE;"); // sem o IMMEDIATE o busy_timeout não vale aqui
     try {
-        executar(SCHEMA); // banco novo: cria a tabela já com todas as colunas
+        // banco novo: cria as tabelas já com todas as colunas. Da 2 para a 3 e da 3
+        // para a 4 não precisa de script: o CREATE ... IF NOT EXISTS cria o que falta
+        executar(SCHEMA);
         if (versao == 1) executar(MIGRACAO_V1_PARA_V2);
         executar(("PRAGMA user_version = " + std::to_string(VERSAO_SCHEMA) + ";").c_str());
         executar("COMMIT;");
